@@ -21,13 +21,11 @@
   let _popupDismiss = null;   // dismiss fn for the currently open popup
 
   const SOURCE_HINDRANCE      = 'rw-hindrances';
-  const SOURCE_DIVERSION      = 'rw-diversions';
   const SOURCE_BRUSSELS       = 'rw-brussels';
   const SOURCE_NDW             = 'rw-ndw';
   const SOURCE_OSM             = 'rw-osm';
   const LAYER_FILL             = 'rw-fill';
   const LAYER_OUTLINE          = 'rw-outline';
-  const LAYER_DIVERSION        = 'rw-diversion';
   const LAYER_BRUSSELS_CIRCLE  = 'rw-brussels-circle';
   const LAYER_NDW_LINE         = 'rw-ndw-line';
   const LAYER_OSM_FILL         = 'rw-osm-fill';
@@ -47,7 +45,7 @@
     const { type } = e.data;
 
     if (type === 'RW_DATA' && activeMap) {
-      applyData(activeMap, e.data.hindrances, e.data.brussels, e.data.ndw, e.data.diversions, e.data.osm);
+      applyData(activeMap, e.data.hindrances, e.data.brussels, e.data.ndw, e.data.osm);
     }
 
     if (type === 'RW_TOGGLE') {
@@ -71,13 +69,6 @@
         data: { type: 'FeatureCollection', features: [] },
       });
     }
-    if (!map.getSource(SOURCE_DIVERSION)) {
-      map.addSource(SOURCE_DIVERSION, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-
     // Hindrance fill
     if (!map.getLayer(LAYER_FILL)) {
       map.addLayer({
@@ -138,8 +129,6 @@
         },
       });
     }
-
-    // Diversion line — hidden by default (layer not added)
 
     // Netherlands NDW closures (LineString geometry)
     if (!map.getSource(SOURCE_NDW)) {
@@ -260,7 +249,7 @@
     });
   }
 
-  function applyData(map, hindrances, brussels, ndw, diversions, osm) {
+  function applyData(map, hindrances, brussels, ndw, osm) {
     if (!map || !map.isStyleLoaded()) return;
 
     // Ensure layers exist (e.g. after style reload)
@@ -272,27 +261,24 @@
     const hSrc = map.getSource(SOURCE_HINDRANCE);
     const bSrc = map.getSource(SOURCE_BRUSSELS);
     const nSrc = map.getSource(SOURCE_NDW);
-    const dSrc = map.getSource(SOURCE_DIVERSION);
     const oSrc = map.getSource(SOURCE_OSM);
     if (hSrc) hSrc.setData(hindrances || { type: 'FeatureCollection', features: [] });
     if (bSrc) bSrc.setData(brussels   || { type: 'FeatureCollection', features: [] });
     if (nSrc) nSrc.setData(ndw        || { type: 'FeatureCollection', features: [] });
-    if (dSrc) dSrc.setData(diversions || { type: 'FeatureCollection', features: [] });
     if (oSrc) oSrc.setData(osm        || { type: 'FeatureCollection', features: [] });
     const hCount = (hindrances && hindrances.features) ? hindrances.features.length : 0;
     const bCount = (brussels   && brussels.features)   ? brussels.features.length   : 0;
     const nCount = (ndw        && ndw.features)        ? ndw.features.length        : 0;
-    const dCount = (diversions && diversions.features) ? diversions.features.length : 0;
     const oCount = (osm        && osm.features)        ? osm.features.length        : 0;
-    if (hCount + bCount + nCount + dCount + oCount > 0) {
-      console.log(`[RoadWorks] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${dCount} diversions, ${oCount} OSM`);
+    if (hCount + bCount + nCount + oCount > 0) {
+      console.log(`[RoadWorks] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${oCount} OSM`);
     }
   }
 
   function setVisible(map, visible) {
     if (!map) return;
     const v = visible ? 'visible' : 'none';
-    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_DIVERSION, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
+    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
     });
   }

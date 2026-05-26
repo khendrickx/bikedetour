@@ -39,20 +39,6 @@ async function fetchGipodHindrance(bbox) {
   return res.json();
 }
 
-async function fetchGipodDiversions(bbox) {
-  const base = 'https://geo.api.vlaanderen.be/GIPOD/ogc/features/v1/collections/OMLEIDING/items';
-  const params = new URLSearchParams({
-    f: 'application/geo+json',
-    bbox: `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`,
-    'bbox-crs': 'http://www.opengis.net/def/crs/OGC/1.3/CRS84',
-    limit: '200',
-  });
-
-  const res = await fetch(`${base}?${params}`);
-  if (!res.ok) throw new Error(`GIPOD OMLEIDING HTTP ${res.status}`);
-  return res.json();
-}
-
 // ── Normalisation ───────────────────────────────────────────────────────────
 
 function isCyclistFeature(props) {
@@ -82,22 +68,6 @@ function normaliseHindrance(feature) {
       owner:       p.HindranceOwner || '',
       consequence: p.ConsequenceTreeLevel1 || p.Consequence || '',
       infoUrl:     p.HindranceUri || p.Uri || null,
-    },
-  };
-}
-
-function normaliseDiversion(feature) {
-  const p = feature.properties || {};
-  return {
-    ...feature,
-    properties: {
-      source:      'gipod_diversion',
-      id:          p.DiversionId || p.fid || '',
-      description: p.HindranceDescription || 'Omleiding',
-      start:       p.HindranceStart || null,
-      end:         p.HindranceEnd   || null,
-      owner:       p.HindranceOwner || '',
-      infoUrl:     p.HindranceURI || p.HindranceUri || null,
     },
   };
 }
@@ -338,9 +308,10 @@ function normaliseOsmElement(el) {
 }
 
 const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.fr/api/interpreter',
+  // 'https://overpass-api.de/api/interpreter',
+  // 'https://overpass.private.coffee/api/interpreter',
+  // 'https://overpass.kumi.systems/api/interpreter',
+  // 'https://overpass.openstreetmap.fr/api/interpreter',
 ];
 
 const OVERPASS_TIMEOUT_MS = 2000;
@@ -364,7 +335,10 @@ out geom;`;
     try {
       const res = await fetch(url, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Komoot RoadWorks Extension (https://www.komoot.com/plan)',
+        },
         body,
         signal:  controller.signal,
       });
@@ -403,21 +377,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       const fetchJobs = [
         fetchGipodHindrance(bbox),
-        fetchGipodDiversions(bbox),
         bboxOverlapsBrussels(bbox)     ? fetchBrusselsEvents(bbox) : Promise.resolve(null),
         bboxOverlapsNetherlands(bbox)  ? fetchNdwClosures()        : Promise.resolve(null),
         fetchOsmConstruction(bbox),
       ];
-      const [hindranceResult, diversionResult, brusselsResult, ndwResult, osmResult] = await Promise.allSettled(fetchJobs);
+      const [hindranceResult, brusselsResult, ndwResult, osmResult] = await Promise.allSettled(fetchJobs);
 
       const hindrances = hindranceResult.status === 'fulfilled'
         ? hindranceResult.value.features
             .filter(f => isCyclistFeature(f.properties || {}))
             .map(normaliseHindrance)
-        : [];
-
-      const diversions = diversionResult.status === 'fulfilled'
-        ? diversionResult.value.features.map(normaliseDiversion)
         : [];
 
       const brusselsRaw = brusselsResult.status === 'fulfilled' && brusselsResult.value
@@ -438,7 +407,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         hindrances: { type: 'FeatureCollection', features: hindrances },
         brussels:   { type: 'FeatureCollection', features: brussels },
         ndw:        { type: 'FeatureCollection', features: ndw },
-        diversions: { type: 'FeatureCollection', features: diversions },
         osm,
       };
 
