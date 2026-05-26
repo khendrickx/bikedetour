@@ -24,11 +24,14 @@
   const SOURCE_DIVERSION      = 'rw-diversions';
   const SOURCE_BRUSSELS       = 'rw-brussels';
   const SOURCE_NDW             = 'rw-ndw';
+  const SOURCE_OSM             = 'rw-osm';
   const LAYER_FILL             = 'rw-fill';
   const LAYER_OUTLINE          = 'rw-outline';
   const LAYER_DIVERSION        = 'rw-diversion';
   const LAYER_BRUSSELS_CIRCLE  = 'rw-brussels-circle';
   const LAYER_NDW_LINE         = 'rw-ndw-line';
+  const LAYER_OSM_LINE         = 'rw-osm-line';
+  const LAYER_OSM_CIRCLE       = 'rw-osm-circle';
 
   // ── Message bridge (page → content) ─────────────────────────────────────
 
@@ -43,7 +46,7 @@
     const { type } = e.data;
 
     if (type === 'RW_DATA' && activeMap) {
-      applyData(activeMap, e.data.hindrances, e.data.brussels, e.data.ndw, e.data.diversions);
+      applyData(activeMap, e.data.hindrances, e.data.brussels, e.data.ndw, e.data.diversions, e.data.osm);
     }
 
     if (type === 'RW_TOGGLE') {
@@ -162,6 +165,52 @@
       });
     }
 
+    // OSM construction data (Overpass) — crimson-shifted tints, dashed lines
+    if (!map.getSource(SOURCE_OSM)) {
+      map.addSource(SOURCE_OSM, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+    if (!map.getLayer(LAYER_OSM_LINE)) {
+      map.addLayer({
+        id:     LAYER_OSM_LINE,
+        type:   'line',
+        source: SOURCE_OSM,
+        filter: ['==', ['geometry-type'], 'LineString'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': [
+            'match', ['get', 'severity'],
+            'full_closure', '#C62828',
+            /* partial */ '#E65100',
+          ],
+          'line-width':    4,
+          'line-dasharray': [4, 3],
+          'line-opacity':  0.85,
+        },
+      });
+    }
+    if (!map.getLayer(LAYER_OSM_CIRCLE)) {
+      map.addLayer({
+        id:     LAYER_OSM_CIRCLE,
+        type:   'circle',
+        source: SOURCE_OSM,
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': [
+            'match', ['get', 'severity'],
+            'full_closure', '#C62828',
+            /* partial */ '#E65100',
+          ],
+          'circle-stroke-width':  2,
+          'circle-stroke-color': '#fff',
+          'circle-opacity':       0.9,
+        },
+      });
+    }
+
     // Hover popup with sticky grace period — lets the user move mouse to the popup and click links.
     // mouseleave → 450 ms countdown; mouseenter on popup → cancel; mouseleave popup → restart.
     function onFeatureHover(e) {
@@ -178,6 +227,10 @@
     map.on('mouseleave', LAYER_BRUSSELS_CIRCLE, ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
     map.on('mouseenter', LAYER_NDW_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
     map.on('mouseleave', LAYER_NDW_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
+    map.on('mouseenter', LAYER_OSM_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
+    map.on('mouseleave', LAYER_OSM_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
+    map.on('mouseenter', LAYER_OSM_CIRCLE,      (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
+    map.on('mouseleave', LAYER_OSM_CIRCLE,      ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
 
     // Re-add layers after a style reload (Komoot may switch themes)
     map.on('style.load', () => {
@@ -186,7 +239,7 @@
     });
   }
 
-  function applyData(map, hindrances, brussels, ndw, diversions) {
+  function applyData(map, hindrances, brussels, ndw, diversions, osm) {
     if (!map || !map.isStyleLoaded()) return;
 
     // Ensure layers exist (e.g. after style reload)
@@ -199,23 +252,26 @@
     const bSrc = map.getSource(SOURCE_BRUSSELS);
     const nSrc = map.getSource(SOURCE_NDW);
     const dSrc = map.getSource(SOURCE_DIVERSION);
+    const oSrc = map.getSource(SOURCE_OSM);
     if (hSrc) hSrc.setData(hindrances || { type: 'FeatureCollection', features: [] });
     if (bSrc) bSrc.setData(brussels   || { type: 'FeatureCollection', features: [] });
     if (nSrc) nSrc.setData(ndw        || { type: 'FeatureCollection', features: [] });
     if (dSrc) dSrc.setData(diversions || { type: 'FeatureCollection', features: [] });
+    if (oSrc) oSrc.setData(osm        || { type: 'FeatureCollection', features: [] });
     const hCount = (hindrances && hindrances.features) ? hindrances.features.length : 0;
     const bCount = (brussels   && brussels.features)   ? brussels.features.length   : 0;
     const nCount = (ndw        && ndw.features)        ? ndw.features.length        : 0;
     const dCount = (diversions && diversions.features) ? diversions.features.length : 0;
-    if (hCount + bCount + nCount + dCount > 0) {
-      console.log(`[RoadWorks] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${dCount} diversions`);
+    const oCount = (osm        && osm.features)        ? osm.features.length        : 0;
+    if (hCount + bCount + nCount + dCount + oCount > 0) {
+      console.log(`[RoadWorks] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${dCount} diversions, ${oCount} OSM`);
     }
   }
 
   function setVisible(map, visible) {
     if (!map) return;
     const v = visible ? 'visible' : 'none';
-    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_DIVERSION].forEach((id) => {
+    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_DIVERSION, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
     });
   }
@@ -223,7 +279,7 @@
   function setLimitedVisible(map, visible) {
     if (!map) return;
     const filter = visible ? null : ['==', ['get', 'severity'], 'full_closure'];
-    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE].forEach((id) => {
+    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
       if (map.getLayer(id)) map.setFilter(id, filter);
     });
   }
