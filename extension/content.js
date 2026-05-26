@@ -51,6 +51,7 @@
               brussels:   response.data.brussels,
               ndw:        response.data.ndw,
               diversions: response.data.diversions,
+              osm:        response.data.osm,
             }, '*');
           }
         }
