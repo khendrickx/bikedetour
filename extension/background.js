@@ -298,6 +298,9 @@ function normaliseOsmElement(el) {
     description = `Wegwerkzaamheden (${tags.construction})`;
   } else if (tags.highway === 'construction') {
     description = 'Wegwerkzaamheden';
+  } else if (Object.keys(tags).some(k => k.startsWith('construction:'))) {
+    const constructionType = Object.keys(tags).find(k => k.startsWith('construction:'));
+    description = `In aanleg (${tags[constructionType]})`;
   } else {
     description = 'Constructiebarrière';
   }
@@ -340,7 +343,7 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass.osm.ch/api/interpreter',
 ];
 
-const OVERPASS_TIMEOUT_MS = 20_000;
+const OVERPASS_TIMEOUT_MS = 2000;
 
 async function fetchOsmConstruction(bbox) {
   const query = `[out:json][timeout:25][bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
@@ -348,6 +351,7 @@ async function fetchOsmConstruction(bbox) {
   way[highway=construction];
   way[barrier=construction];
   way[landuse=construction];
+  way[~"^construction:"~"."];
   node[barrier=construction];
 );
 out geom;`;

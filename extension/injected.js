@@ -179,7 +179,7 @@
         id:     LAYER_OSM_FILL,
         type:   'fill',
         source: SOURCE_OSM,
-        filter: ['==', ['geometry-type'], 'Polygon'],
+        filter: ['==', '$type', 'Polygon'],
         paint: {
           'fill-color': [
             'match', ['get', 'severity'],
@@ -196,7 +196,7 @@
         id:     LAYER_OSM_LINE,
         type:   'line',
         source: SOURCE_OSM,
-        filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']],
+        filter: ['in', '$type', 'LineString', 'Polygon'],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': [
@@ -215,7 +215,7 @@
         id:     LAYER_OSM_CIRCLE,
         type:   'circle',
         source: SOURCE_OSM,
-        filter: ['==', ['geometry-type'], 'Point'],
+        filter: ['==', '$type', 'Point'],
         paint: {
           'circle-radius': 7,
           'circle-color': [
