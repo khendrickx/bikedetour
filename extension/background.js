@@ -282,6 +282,53 @@ function bboxOverlapsNetherlands(bbox) {
          bbox.north > 50.6 && bbox.south < 53.7;
 }
 
+// ── OpenStreetMap (Overpass) ────────────────────────────────────────────────
+
+function normaliseOsmElement(el) {
+  const tags  = el.tags || {};
+  const isWay = el.type === 'way';
+  const id    = `${el.type}/${el.id}`;
+
+  let description;
+  if (tags.name) {
+    description = tags.name;
+  } else if (tags.highway === 'construction' && tags.construction) {
+    description = `Wegwerkzaamheden (${tags.construction})`;
+  } else if (tags.highway === 'construction') {
+    description = 'Wegwerkzaamheden';
+  } else {
+    description = 'Constructiebarrière';
+  }
+
+  const access   = tags.access || '';
+  const severity = (access === 'permissive' || access === 'yes') ? 'partial' : 'full_closure';
+
+  const properties = {
+    source:      'osm',
+    id,
+    description,
+    start:       tags.start_date || null,
+    end:         tags.end_date   || null,
+    severity,
+    owner:       'OpenStreetMap',
+    consequence: '',
+    infoUrl:     `https://www.openstreetmap.org/${id}`,
+  };
+
+  let geometry;
+  if (isWay) {
+    if (!el.geometry || el.geometry.length < 2) return null;
+    geometry = {
+      type:        'LineString',
+      coordinates: el.geometry.map(p => [p.lon, p.lat]),
+    };
+  } else {
+    geometry = { type: 'Point', coordinates: [el.lon, el.lat] };
+  }
+
+  return { type: 'Feature', geometry, properties };
+}
+
 // ── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
