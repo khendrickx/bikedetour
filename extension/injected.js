@@ -30,6 +30,7 @@
   const LAYER_DIVERSION        = 'rw-diversion';
   const LAYER_BRUSSELS_CIRCLE  = 'rw-brussels-circle';
   const LAYER_NDW_LINE         = 'rw-ndw-line';
+  const LAYER_OSM_FILL         = 'rw-osm-fill';
   const LAYER_OSM_LINE         = 'rw-osm-line';
   const LAYER_OSM_CIRCLE       = 'rw-osm-circle';
 
@@ -172,12 +173,30 @@
         data: { type: 'FeatureCollection', features: [] },
       });
     }
+    // Fill for polygon features (landuse=construction areas)
+    if (!map.getLayer(LAYER_OSM_FILL)) {
+      map.addLayer({
+        id:     LAYER_OSM_FILL,
+        type:   'fill',
+        source: SOURCE_OSM,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: {
+          'fill-color': [
+            'match', ['get', 'severity'],
+            'full_closure', '#C62828',
+            /* partial */ '#E65100',
+          ],
+          'fill-opacity': 0.25,
+        },
+      });
+    }
+    // Outline for both linear and polygon features
     if (!map.getLayer(LAYER_OSM_LINE)) {
       map.addLayer({
         id:     LAYER_OSM_LINE,
         type:   'line',
         source: SOURCE_OSM,
-        filter: ['==', ['geometry-type'], 'LineString'],
+        filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': [
@@ -227,6 +246,8 @@
     map.on('mouseleave', LAYER_BRUSSELS_CIRCLE, ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
     map.on('mouseenter', LAYER_NDW_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
     map.on('mouseleave', LAYER_NDW_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
+    map.on('mouseenter', LAYER_OSM_FILL,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
+    map.on('mouseleave', LAYER_OSM_FILL,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
     map.on('mouseenter', LAYER_OSM_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
     map.on('mouseleave', LAYER_OSM_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
     map.on('mouseenter', LAYER_OSM_CIRCLE,      (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
@@ -271,7 +292,7 @@
   function setVisible(map, visible) {
     if (!map) return;
     const v = visible ? 'visible' : 'none';
-    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_DIVERSION, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
+    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_DIVERSION, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
     });
   }
@@ -279,7 +300,7 @@
   function setLimitedVisible(map, visible) {
     if (!map) return;
     const filter = visible ? null : ['==', ['get', 'severity'], 'full_closure'];
-    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
+    [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
       if (map.getLayer(id)) map.setFilter(id, filter);
     });
   }

@@ -292,6 +292,8 @@ function normaliseOsmElement(el) {
   let description;
   if (tags.name) {
     description = tags.name;
+  } else if (tags.landuse === 'construction') {
+    description = 'Bouwplaats';
   } else if (tags.highway === 'construction' && tags.construction) {
     description = `Wegwerkzaamheden (${tags.construction})`;
   } else if (tags.highway === 'construction') {
@@ -318,10 +320,13 @@ function normaliseOsmElement(el) {
   let geometry;
   if (isWay) {
     if (!el.geometry || el.geometry.length < 2) return null;
-    geometry = {
-      type:        'LineString',
-      coordinates: el.geometry.map(p => [p.lon, p.lat]),
-    };
+    const coords = el.geometry.map(p => [p.lon, p.lat]);
+    const first = el.geometry[0], last = el.geometry[el.geometry.length - 1];
+    const isClosed = el.geometry.length >= 4 &&
+      first.lat === last.lat && first.lon === last.lon;
+    geometry = isClosed
+      ? { type: 'Polygon',    coordinates: [coords] }
+      : { type: 'LineString', coordinates: coords };
   } else {
     geometry = { type: 'Point', coordinates: [el.lon, el.lat] };
   }
@@ -334,6 +339,7 @@ async function fetchOsmConstruction(bbox) {
 (
   way[highway=construction];
   way[barrier=construction];
+  way[landuse=construction];
   node[barrier=construction];
 );
 out geom;`;

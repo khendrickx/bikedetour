@@ -11,6 +11,8 @@ function normaliseOsmElement(el) {
   let description;
   if (tags.name) {
     description = tags.name;
+  } else if (tags.landuse === 'construction') {
+    description = 'Bouwplaats';
   } else if (tags.highway === 'construction' && tags.construction) {
     description = `Wegwerkzaamheden (${tags.construction})`;
   } else if (tags.highway === 'construction') {
@@ -37,10 +39,13 @@ function normaliseOsmElement(el) {
   let geometry;
   if (isWay) {
     if (!el.geometry || el.geometry.length < 2) return null;
-    geometry = {
-      type:        'LineString',
-      coordinates: el.geometry.map(p => [p.lon, p.lat]),
-    };
+    const coords = el.geometry.map(p => [p.lon, p.lat]);
+    const first = el.geometry[0], last = el.geometry[el.geometry.length - 1];
+    const isClosed = el.geometry.length >= 4 &&
+      first.lat === last.lat && first.lon === last.lon;
+    geometry = isClosed
+      ? { type: 'Polygon',    coordinates: [coords] }
+      : { type: 'LineString', coordinates: coords };
   } else {
     geometry = { type: 'Point', coordinates: [el.lon, el.lat] };
   }
@@ -135,6 +140,40 @@ function normaliseOsmElement(el) {
   assert.equal(f.properties.start, '2026-01-01');
   assert.equal(f.properties.end,   '2026-12-31');
   console.log('✓ Test 7: start_date / end_date preserved');
+}
+
+// ── Test 8: landuse=construction closed way → Polygon ────────────────────────
+{
+  const way = {
+    type: 'way', id: 77604765,
+    geometry: [
+      { lat: 51.58, lon: 4.46 },
+      { lat: 51.59, lon: 4.46 },
+      { lat: 51.59, lon: 4.47 },
+      { lat: 51.58, lon: 4.46 }, // closed ring
+    ],
+    tags: { landuse: 'construction' },
+  };
+  const f = normaliseOsmElement(way);
+  assert.equal(f.geometry.type, 'Polygon');
+  assert.equal(f.properties.description, 'Bouwplaats');
+  assert.equal(f.properties.severity, 'full_closure');
+  // Polygon coordinates are wrapped in an extra array (outer ring)
+  assert.equal(f.geometry.coordinates.length, 1);
+  assert.equal(f.geometry.coordinates[0].length, 4);
+  console.log('✓ Test 8: landuse=construction closed way → Polygon');
+}
+
+// ── Test 9: open way (highway=construction) stays LineString ──────────────────
+{
+  const way = {
+    type: 'way', id: 555,
+    geometry: [{ lat: 51.0, lon: 4.0 }, { lat: 51.1, lon: 4.1 }, { lat: 51.2, lon: 4.2 }],
+    tags: { highway: 'construction' },
+  };
+  const f = normaliseOsmElement(way);
+  assert.equal(f.geometry.type, 'LineString');
+  console.log('✓ Test 9: open way stays LineString');
 }
 
 console.log('\nAll normalisation tests passed.');
