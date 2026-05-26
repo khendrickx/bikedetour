@@ -334,6 +334,11 @@ function normaliseOsmElement(el) {
   return { type: 'Feature', geometry, properties };
 }
 
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
 async function fetchOsmConstruction(bbox) {
   const query = `[out:json][timeout:25][bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
 (
@@ -344,17 +349,27 @@ async function fetchOsmConstruction(bbox) {
 );
 out geom;`;
 
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    'data=' + encodeURIComponent(query),
-  });
-  if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-  const json = await res.json();
-  const features = (json.elements || [])
-    .map(normaliseOsmElement)
-    .filter(Boolean);
-  return { type: 'FeatureCollection', features };
+  const body = 'data=' + encodeURIComponent(query);
+
+  for (const url of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const features = (json.elements || [])
+        .map(normaliseOsmElement)
+        .filter(Boolean);
+      return { type: 'FeatureCollection', features };
+    } catch (err) {
+      console.warn(`[RoadWorks] Overpass ${url} failed:`, err.message);
+    }
+  }
+
+  throw new Error('All Overpass endpoints failed');
 }
 
 // ── Message handler ─────────────────────────────────────────────────────────

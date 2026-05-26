@@ -10,7 +10,8 @@
     "https://geo.api.vlaanderen.be/*",
     "https://data.mobility.brussels/*",
     "https://opendata.ndw.nu/*",
-    "https://overpass-api.de/*"
+    "https://overpass-api.de/*",
+    "https://overpass.kumi.systems/*"
   ],
 
   "background": {
