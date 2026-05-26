@@ -32,6 +32,14 @@
   const LAYER_OSM_LINE         = 'rw-osm-line';
   const LAYER_OSM_CIRCLE       = 'rw-osm-circle';
 
+  // Base geometry-type filters for layers that need them.
+  // setLimitedVisible must preserve these when adding a severity filter.
+  const LAYER_BASE_FILTER = {
+    [LAYER_OSM_FILL]:   ['==', '$type', 'Polygon'],
+    [LAYER_OSM_LINE]:   ['in', '$type', 'LineString', 'Polygon'],
+    [LAYER_OSM_CIRCLE]: ['==', '$type', 'Point'],
+  };
+
   // ── Message bridge (page → content) ─────────────────────────────────────
 
   function toContent(type, payload) {
@@ -219,8 +227,10 @@
       });
     }
 
-    // Hover popup with sticky grace period — lets the user move mouse to the popup and click links.
-    // mouseleave → 450 ms countdown; mouseenter on popup → cancel; mouseleave popup → restart.
+  }
+
+  // Called once per map instance from onMapReady — never from addLayers.
+  function addHoverListeners(map) {
     function onFeatureHover(e) {
       if (!e.features || !e.features.length) return;
       cancelHide();
@@ -229,24 +239,14 @@
       _popupDismiss = showPopup(map, e.lngLat, html);
     }
 
-    map.on('mouseenter', LAYER_FILL,            (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_FILL,            ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-    map.on('mouseenter', LAYER_BRUSSELS_CIRCLE, (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_BRUSSELS_CIRCLE, ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-    map.on('mouseenter', LAYER_NDW_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_NDW_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-    map.on('mouseenter', LAYER_OSM_FILL,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_OSM_FILL,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-    map.on('mouseenter', LAYER_OSM_LINE,        (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_OSM_LINE,        ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-    map.on('mouseenter', LAYER_OSM_CIRCLE,      (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
-    map.on('mouseleave', LAYER_OSM_CIRCLE,      ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
-
-    // Re-add layers after a style reload (Komoot may switch themes)
-    map.on('style.load', () => {
-      // Sources & layers are wiped on style change; re-add them on next data arrival
-      requestData(map);
+    const hoverLayers = [LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
+    hoverLayers.forEach((id) => {
+      map.on('mouseenter', id, (e) => { map.getCanvas().style.cursor = 'pointer'; onFeatureHover(e); });
+      map.on('mouseleave', id, ()  => { map.getCanvas().style.cursor = ''; scheduleHide(450); });
     });
+
+    // Re-fetch (and re-add layers) after a style reload — Komoot may switch themes
+    map.on('style.load', () => requestData(map));
   }
 
   function applyData(map, hindrances, brussels, ndw, osm) {
@@ -285,9 +285,17 @@
 
   function setLimitedVisible(map, visible) {
     if (!map) return;
-    const filter = visible ? null : ['==', ['get', 'severity'], 'full_closure'];
+    const severityFilter = ['==', ['get', 'severity'], 'full_closure'];
     [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE].forEach((id) => {
-      if (map.getLayer(id)) map.setFilter(id, filter);
+      if (!map.getLayer(id)) return;
+      const base = LAYER_BASE_FILTER[id] || null;
+      let filter;
+      if (visible) {
+        filter = base; // restore base type filter (or null for layers without one)
+      } else {
+        filter = base ? ['all', base, severityFilter] : severityFilter;
+      }
+      map.setFilter(id, filter);
     });
   }
 
@@ -324,6 +332,9 @@
     if (activeMap === map) return;
     activeMap = map;
     console.log('[RoadWorks] Map detected ✓');
+
+    // Hover listeners and style-reload handler — registered once per map instance
+    addHoverListeners(map);
 
     // Add overlay layers once the map style is ready
     const doInit = () => {
@@ -569,6 +580,8 @@
       : '<span style="color:#FB8C00;font-weight:bold">⚠️ Beperkte doorgang voor fietsers</span>';
     const locationLine = p.location
       ? `<div style="margin-top:4px;color:#555">📍 ${escHtml(p.location)}</div>` : '';
+    const infoLink = p.infoUrl
+      ? `<div style="margin-top:6px"><a href="${escHtml(p.infoUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1565C0;text-decoration:none;font-size:12px">Meer info →</a></div>` : '';
     return `<div>
       <div style="font-weight:600;margin-bottom:4px;padding-right:18px">${escHtml(p.description || 'Wegwerken')}</div>
       ${severityBadge}
@@ -577,6 +590,7 @@
         📅 ${fmt(p.start)} → ${fmt(p.end)}<br>
         🏢 ${escHtml(p.owner || '—')}
       </div>
+      ${infoLink}
     </div>`;
   }
 
