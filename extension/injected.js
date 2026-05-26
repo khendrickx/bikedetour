@@ -514,7 +514,6 @@
         📅 ${fmt(p.start)} → ${fmt(p.end)}<br>
         🏢 ${escHtml(p.owner || '—')}
       </div>
-      ${p.infoUrl ? `<a href="${escHtml(p.infoUrl)}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:12px;color:#1565C0">Meer info ↗</a>` : ''}
     </div>`;
   }
 
