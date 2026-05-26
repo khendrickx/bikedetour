@@ -329,6 +329,28 @@ function normaliseOsmElement(el) {
   return { type: 'Feature', geometry, properties };
 }
 
+async function fetchOsmConstruction(bbox) {
+  const query = `[out:json][timeout:25][bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
+(
+  way[highway=construction];
+  way[barrier=construction];
+  node[barrier=construction];
+);
+out geom;`;
+
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    'data=' + encodeURIComponent(query),
+  });
+  if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
+  const json = await res.json();
+  const features = (json.elements || [])
+    .map(normaliseOsmElement)
+    .filter(Boolean);
+  return { type: 'FeatureCollection', features };
+}
+
 // ── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -351,8 +373,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         fetchGipodDiversions(bbox),
         bboxOverlapsBrussels(bbox)     ? fetchBrusselsEvents(bbox) : Promise.resolve(null),
         bboxOverlapsNetherlands(bbox)  ? fetchNdwClosures()        : Promise.resolve(null),
+        fetchOsmConstruction(bbox),
       ];
-      const [hindranceResult, diversionResult, brusselsResult, ndwResult] = await Promise.allSettled(fetchJobs);
+      const [hindranceResult, diversionResult, brusselsResult, ndwResult, osmResult] = await Promise.allSettled(fetchJobs);
 
       const hindrances = hindranceResult.status === 'fulfilled'
         ? hindranceResult.value.features
@@ -374,11 +397,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         : [];
       const ndw = filterNdwByBbox(ndwAll, bbox);
 
+      const osm = osmResult.status === 'fulfilled' && osmResult.value
+        ? osmResult.value
+        : { type: 'FeatureCollection', features: [] };
+
       const data = {
         hindrances: { type: 'FeatureCollection', features: hindrances },
         brussels:   { type: 'FeatureCollection', features: brussels },
         ndw:        { type: 'FeatureCollection', features: ndw },
         diversions: { type: 'FeatureCollection', features: diversions },
+        osm,
       };
 
       // Store in memory; evict oldest entries beyond 20 tiles
