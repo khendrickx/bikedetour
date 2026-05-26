@@ -196,7 +196,7 @@
         id:     LAYER_OSM_LINE,
         type:   'line',
         source: SOURCE_OSM,
-        filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
+        filter: ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'Polygon']],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': [

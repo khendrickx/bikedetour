@@ -337,7 +337,10 @@ function normaliseOsmElement(el) {
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.osm.ch/api/interpreter',
 ];
+
+const OVERPASS_TIMEOUT_MS = 20_000;
 
 async function fetchOsmConstruction(bbox) {
   const query = `[out:json][timeout:25][bbox:${bbox.south},${bbox.west},${bbox.north},${bbox.east}];
@@ -352,12 +355,16 @@ out geom;`;
   const body = 'data=' + encodeURIComponent(query);
 
   for (const url of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
     try {
       const res = await fetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
+        signal:  controller.signal,
       });
+      clearTimeout(timer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const features = (json.elements || [])
@@ -365,6 +372,7 @@ out geom;`;
         .filter(Boolean);
       return { type: 'FeatureCollection', features };
     } catch (err) {
+      clearTimeout(timer);
       console.warn(`[RoadWorks] Overpass ${url} failed:`, err.message);
     }
   }
