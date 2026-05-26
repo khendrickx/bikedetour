@@ -48,6 +48,8 @@
               __rw:       FROM_CONTENT,
               type:       'RW_DATA',
               hindrances: response.data.hindrances,
+              brussels:   response.data.brussels,
+              ndw:        response.data.ndw,
               diversions: response.data.diversions,
             }, '*');
           }
@@ -66,16 +68,18 @@
         enabled: message.enabled,
       }, '*');
     }
+    if (message.type === 'TOGGLE_LIMITED') {
+      window.postMessage({
+        __rw:    FROM_CONTENT,
+        type:    'RW_TOGGLE_LIMITED',
+        enabled: message.enabled,
+      }, '*');
+    }
   });
 
   // Apply persisted toggle state on page load
-  chrome.storage.local.get('overlayEnabled', ({ overlayEnabled }) => {
-    // Default to enabled if not explicitly disabled
-    const enabled = overlayEnabled !== false;
-    window.postMessage({
-      __rw:    FROM_CONTENT,
-      type:    'RW_TOGGLE',
-      enabled,
-    }, '*');
+  chrome.storage.local.get(['overlayEnabled', 'showLimitedAccess'], ({ overlayEnabled, showLimitedAccess }) => {
+    window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE',         enabled: overlayEnabled    !== false }, '*');
+    window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE_LIMITED', enabled: showLimitedAccess !== false }, '*');
   });
 })();

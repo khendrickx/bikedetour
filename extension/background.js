@@ -1,10 +1,10 @@
 /**
  * background.js — MV3 Service Worker
- * Handles data fetching from GIPOD and caching in chrome.storage.local.
+ * Handles data fetching from GIPOD with in-memory per-bbox caching.
  */
 
-const CACHE_PREFIX = 'rw_cache_';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const _bboxCache = new Map(); // key -> { data, fetchedAt }
 
 // Cyclist-relevant Level-0 consequence UUID from GIPOD taxonomy
 const CYCLIST_L0_UUID = '82e84ba4-b3e9-4171-9834-ec18dca16485';
@@ -20,7 +20,7 @@ function getBboxCacheKey(bbox) {
   const s = snap(bbox.south, 0.25);
   const e = snap(bbox.east  + 0.25, 0.25);
   const n = snap(bbox.north + 0.25, 0.25);
-  return `${CACHE_PREFIX}${w},${s},${e},${n}`;
+  return `${w},${s},${e},${n}`;
 }
 
 // ── GIPOD fetchers ──────────────────────────────────────────────────────────
@@ -109,21 +109,32 @@ function normaliseDiversion(feature) {
 
 async function fetchBrusselsEvents(bbox) {
   const base = 'https://data.mobility.brussels/geoserver/bm_traffic/wfs';
-  // CQL BBOX uses CRS:84 (lon-lat) axis order
-  const cql  = `BBOX(geometry,${bbox.west},${bbox.south},${bbox.east},${bbox.north},'CRS:84') AND is_active=true AND importance<>'0'`;
+  // The native geometry column is 'geom' stored in Belgian Lambert (EPSG:31370).
+  // GeoServer's CQL BBOX(geom,...) would need Lambert coordinates, and mixing
+  // the WFS BBOX parameter with CQL_FILTER is unsupported in GET requests.
+  // Solution: fetch all active events and post-filter by bbox in JS.
   const params = new URLSearchParams({
     service:      'wfs',
     version:      '1.1.0',
     request:      'GetFeature',
     typeName:     'bm_traffic:events',
     outputFormat: 'json',
-    srsName:      'EPSG:4326',
-    CQL_FILTER:   cql,
-    maxFeatures:  '200',
+    srsName:      'EPSG:4326',   // → GeoServer reprojects to [lon, lat]
+    CQL_FILTER:   "is_active=true AND importance<>'0'",
+    maxFeatures:  '500',
   });
   const res = await fetch(`${base}?${params}`);
   if (!res.ok) throw new Error(`Brussels WFS HTTP ${res.status}`);
-  return res.json();
+  const fc = await res.json();
+  // Post-filter: coordinates are [lon, lat] in EPSG:4326
+  const features = (fc.features || []).filter(f => {
+    const c = f.geometry && f.geometry.coordinates;
+    if (!c) return false;
+    const [lon, lat] = c;
+    return lon >= bbox.west && lon <= bbox.east &&
+           lat >= bbox.south && lat <= bbox.north;
+  });
+  return { type: 'FeatureCollection', features };
 }
 
 function normaliseBrusselsEvent(feature) {
@@ -152,6 +163,125 @@ function bboxOverlapsBrussels(bbox) {
          bbox.north > 50.74 && bbox.south < 50.95;
 }
 
+// ── Netherlands NDW closures fetcher ───────────────────────────────────────
+// Public open-data file (no auth required):
+// https://opendata.ndw.nu/tijdelijke_verkeersmaatregelen_afsluitingen.xml.gz
+// DATEX II v3 XML, ~162 KB gzip. Refreshed every few minutes by NDW.
+// Note: the larger planningsfeed_wegwerkzaamheden_en_evenementen.xml.gz (20 MB)
+// covers all planned works, but is too large to download in an extension.
+// The Melvin OTM REST API (bbox-filtered JSON) requires a keycloak login and
+// cannot be used in a public extension without credentials.
+
+let _ndwCache = null;
+const NDW_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+async function fetchNdwClosures() {
+  if (_ndwCache && Date.now() - _ndwCache.fetchedAt < NDW_CACHE_TTL_MS) {
+    return _ndwCache.features;
+  }
+  const url = 'https://opendata.ndw.nu/tijdelijke_verkeersmaatregelen_afsluitingen.xml.gz';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`NDW closures HTTP ${res.status}`);
+  const ds = new DecompressionStream('gzip');
+  const xml = await new Response(res.body.pipeThrough(ds)).text();
+  const features = parseNdwXml(xml);
+  _ndwCache = { features, fetchedAt: Date.now() };
+  return features;
+}
+
+// DATEX II causeType → Dutch label
+const NDW_CAUSE_NL = {
+  roadMaintenance:       'Wegonderhoud',
+  roadworks:             'Wegwerkzaamheden',
+  constructionWork:      'Bouwwerkzaamheden',
+  surfaceResurfacing:    'Herbestrating',
+  repairWork:            'Herstelwerkzaamheden',
+  bridgeMaintenanceWork: 'Brugonderhoud',
+  laneRestrictions:      'Rijstrookbeperking',
+  carriagewayObstructions: 'Rijbaanobstructie',
+};
+
+function parseNdwXml(xml) {
+  const features = [];
+  const sitRe = /<sit:situation [^>]*id="([^"]+)">([\s\S]*?)<\/sit:situation>/g;
+  let m;
+
+  while ((m = sitRe.exec(xml)) !== null) {
+    const [, sitId, body] = m;
+
+    const severity  = (body.match(/<sit:overallSeverity>([^<]+)<\/sit:overallSeverity>/) || [])[1] || 'unknown';
+    const start     = (body.match(/<com:overallStartTime>([^<]+)<\/com:overallStartTime>/) || [])[1] || null;
+    const end       = (body.match(/<com:overallEndTime>([^<]+)<\/com:overallEndTime>/) || [])[1] || null;
+    const causeType = (body.match(/<sit:causeType>([^<]+)<\/sit:causeType>/) || [])[1] || '';
+    const srcName   = (body.match(/<com:sourceName>[\s\S]*?<com:value[^>]*>([^<]+)<\/com:value>/) || [])[1] || 'NDW';
+
+    const props = {
+      source:      'ndw',
+      id:          sitId,
+      description: NDW_CAUSE_NL[causeType] || causeType || 'Wegafsluiting',
+      start,
+      end,
+      severity:    severity === 'highest' ? 'full_closure' : 'partial',
+      owner:       srcName,
+      consequence: '',
+      infoUrl:     null,
+    };
+
+    // Prefer GML linestrings (posList) — DATEX II uses lat/lon order in posList
+    const posLists = [];
+    const posRe = /<loc:gmlLineString[^>]*>[\s\S]*?<loc:posList>([\s\S]*?)<\/loc:posList>/g;
+    let pm;
+    while ((pm = posRe.exec(body)) !== null) {
+      const nums = pm[1].trim().split(/\s+/).filter(Boolean).map(Number);
+      const coords = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        coords.push([nums[i + 1], nums[i]]); // swap lat/lon → [lon, lat] for GeoJSON
+      }
+      if (coords.length >= 2) posLists.push(coords);
+    }
+
+    if (posLists.length) {
+      features.push({
+        type: 'Feature',
+        geometry: posLists.length === 1
+          ? { type: 'LineString',      coordinates: posLists[0] }
+          : { type: 'MultiLineString', coordinates: posLists },
+        properties: props,
+      });
+      continue;
+    }
+
+    // Fall back to explicit lat/lon point
+    const lat = parseFloat((body.match(/<loc:latitude>([^<]+)<\/loc:latitude>/)   || [])[1]);
+    const lon = parseFloat((body.match(/<loc:longitude>([^<]+)<\/loc:longitude>/) || [])[1]);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: props });
+    }
+  }
+  return features;
+}
+
+function filterNdwByBbox(features, bbox) {
+  return features.filter((f) => {
+    if (!f.geometry) return false;
+    const { type, coordinates } = f.geometry;
+    const pts =
+      type === 'Point'           ? [coordinates] :
+      type === 'LineString'      ? coordinates :
+      type === 'MultiLineString' ? coordinates.flat() : [];
+    return pts.some(([lon, lat]) =>
+      lon >= bbox.west && lon <= bbox.east &&
+      lat >= bbox.south && lat <= bbox.north
+    );
+  });
+}
+
+// Rough bbox for the Netherlands (with a small buffer)
+function bboxOverlapsNetherlands(bbox) {
+  return bbox.east > 3.2 && bbox.west < 7.3 &&
+         bbox.north > 50.6 && bbox.south < 53.7;
+}
+
 // ── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -162,8 +292,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const cacheKey = getBboxCacheKey(bbox);
 
     // Return cached result if still fresh
-    const stored = await chrome.storage.local.get(cacheKey);
-    const cached = stored[cacheKey];
+    const cached = _bboxCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
       sendResponse({ success: true, data: cached.data, fromCache: true });
       return;
@@ -173,9 +302,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const fetchJobs = [
         fetchGipodHindrance(bbox),
         fetchGipodDiversions(bbox),
-        bboxOverlapsBrussels(bbox) ? fetchBrusselsEvents(bbox) : Promise.resolve(null),
+        bboxOverlapsBrussels(bbox)     ? fetchBrusselsEvents(bbox) : Promise.resolve(null),
+        bboxOverlapsNetherlands(bbox)  ? fetchNdwClosures()        : Promise.resolve(null),
       ];
-      const [hindranceResult, diversionResult, brusselsResult] = await Promise.allSettled(fetchJobs);
+      const [hindranceResult, diversionResult, brusselsResult, ndwResult] = await Promise.allSettled(fetchJobs);
 
       const hindrances = hindranceResult.status === 'fulfilled'
         ? hindranceResult.value.features
@@ -192,21 +322,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         : [];
       const brussels = brusselsRaw.map(normaliseBrusselsEvent);
 
+      const ndwAll = ndwResult.status === 'fulfilled' && ndwResult.value
+        ? ndwResult.value  // already an array of normalised features
+        : [];
+      const ndw = filterNdwByBbox(ndwAll, bbox);
+
       const data = {
         hindrances: { type: 'FeatureCollection', features: hindrances },
         brussels:   { type: 'FeatureCollection', features: brussels },
+        ndw:        { type: 'FeatureCollection', features: ndw },
         diversions: { type: 'FeatureCollection', features: diversions },
       };
 
-      // Purge stale entries to keep storage lean (keep last 20 tiles)
-      const allStored = await chrome.storage.local.get(null);
-      const staleKeys = Object.keys(allStored)
-        .filter(k => k.startsWith(CACHE_PREFIX) && k !== cacheKey)
-        .sort((a, b) => (allStored[a].fetchedAt || 0) - (allStored[b].fetchedAt || 0))
-        .slice(0, -20); // remove oldest beyond 20
-      if (staleKeys.length) await chrome.storage.local.remove(staleKeys);
-
-      await chrome.storage.local.set({ [cacheKey]: { data, fetchedAt: Date.now() } });
+      // Store in memory; evict oldest entries beyond 20 tiles
+      _bboxCache.set(cacheKey, { data, fetchedAt: Date.now() });
+      if (_bboxCache.size > 20) {
+        const oldest = [..._bboxCache.entries()]
+          .sort((a, b) => a[1].fetchedAt - b[1].fetchedAt)[0][0];
+        _bboxCache.delete(oldest);
+      }
 
       sendResponse({ success: true, data });
     } catch (err) {

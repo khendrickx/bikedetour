@@ -57,6 +57,7 @@
     }
     input:checked + .track { background: #E53935; }
     input:checked + .track::after { transform: translateX(18px); }
+    input:checked + .track.limited { background: #FB8C00; }
 
     /* ── Sources section ── */
     .section-title {
@@ -127,6 +128,14 @@
     </label>
   </div>
 
+  <div class="row">
+    <span class="label">Limited access</span>
+    <label class="switch">
+      <input type="checkbox" id="toggleLimited" checked>
+      <span class="track limited"></span>
+    </label>
+  </div>
+
   <div class="section-title">Data sources</div>
 
   <div class="source">
@@ -134,10 +143,15 @@
     <span>GIPOD — Flanders</span>
     <span class="badge live">Live</span>
   </div>
-  <div class="source disabled">
-    <span class="dot pending"></span>
+  <div class="source">
+    <span class="dot active"></span>
     <span>Brussels Mobility</span>
-    <span class="badge soon">Soon</span>
+    <span class="badge live">Live</span>
+  </div>
+  <div class="source">
+    <span class="dot active"></span>
+    <span>NDW — Netherlands</span>
+    <span class="badge live">Live</span>
   </div>
   <div class="source disabled">
     <span class="dot pending"></span>

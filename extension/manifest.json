@@ -8,7 +8,8 @@
   "host_permissions": [
     "https://www.komoot.com/*",
     "https://geo.api.vlaanderen.be/*",
-    "https://data.mobility.brussels/*"
+    "https://data.mobility.brussels/*",
+    "https://opendata.ndw.nu/*"
   ],
 
   "background": {

@@ -1,13 +1,15 @@
 /* popup.js */
 
 (function () {
-  const toggle = document.getElementById('toggleOverlay');
-  const status = document.getElementById('status');
+  const toggle        = document.getElementById('toggleOverlay');
+  const limitedToggle = document.getElementById('toggleLimited');
+  const status        = document.getElementById('status');
 
   // ── Load persisted state ──────────────────────────────────────────────────
 
-  chrome.storage.local.get(['overlayEnabled'], ({ overlayEnabled }) => {
-    toggle.checked = overlayEnabled !== false; // default: enabled
+  chrome.storage.local.get(['overlayEnabled', 'showLimitedAccess'], ({ overlayEnabled, showLimitedAccess }) => {
+    toggle.checked        = overlayEnabled    !== false; // default: enabled
+    limitedToggle.checked = showLimitedAccess !== false; // default: enabled
   });
 
   // Show last-updated time from any cached tile
@@ -40,6 +42,18 @@
       const tab = tabs[0];
       if (tab && tab.id) {
         chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE', enabled });
+      }
+    });
+  });
+
+  limitedToggle.addEventListener('change', () => {
+    const enabled = limitedToggle.checked;
+    chrome.storage.local.set({ showLimitedAccess: enabled });
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      if (tab && tab.id) {
+        chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_LIMITED', enabled });
       }
     });
   });
