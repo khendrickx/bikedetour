@@ -9,7 +9,8 @@
     "https://www.komoot.com/*",
     "https://geo.api.vlaanderen.be/*",
     "https://data.mobility.brussels/*",
-    "https://opendata.ndw.nu/*"
+    "https://opendata.ndw.nu/*",
+    "https://overpass-api.de/*"
   ],
 
   "background": {
