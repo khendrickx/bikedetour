@@ -224,6 +224,7 @@ const PROFILE_DIR = '/tmp/playwright-komoot-rw';
     const dSrc = map.getSource('rw-diversions');
     const bSrc = map.getSource('rw-brussels');
     const nSrc = map.getSource('rw-ndw');
+    const oSrc = map.getSource('rw-osm');
     const srcFeatureCount = (src) => src && src._data && src._data.features ? src._data.features.length : '?';
     return {
       zoom: map.getZoom().toFixed(1),
@@ -233,13 +234,23 @@ const PROFILE_DIR = '/tmp/playwright-komoot-rw';
       diversionLayer: !!map.getLayer('rw-diversion'),
       brusselsLayer: !!map.getLayer('rw-brussels-circle'),
       ndwLayer: !!map.getLayer('rw-ndw-line'),
+      osmLineLayer: !!map.getLayer('rw-osm-line'),
+      osmCircleLayer: !!map.getLayer('rw-osm-circle'),
+      osmSourceExists: !!oSrc,
       hindranceFeatures: srcFeatureCount(hSrc),
       diversionFeatures: srcFeatureCount(dSrc),
       brusselsFeatures:  srcFeatureCount(bSrc),
       ndwFeatures:       srcFeatureCount(nSrc),
+      osmFeatures:       srcFeatureCount(oSrc),
     };
   });
   console.log('Flanders layer data:', layerData);
+  if (!layerData.osmLineLayer)   console.log('  ✗ OSM line layer missing');
+  else                           console.log('  ✓ OSM line layer present');
+  if (!layerData.osmCircleLayer) console.log('  ✗ OSM circle layer missing');
+  else                           console.log('  ✓ OSM circle layer present');
+  if (!layerData.osmSourceExists) console.log('  ✗ OSM source missing');
+  else                            console.log(`  ✓ OSM source present (${layerData.osmFeatures} features)`);
 
   // ── Brussels test ────────────────────────────────────────────────────────
   console.log('\nNavigating to Brussels zoom 13...');
