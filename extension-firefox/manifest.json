@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Komoot Road Works",
+  "version": "0.1.0",
+  "description": "Overlay cycling construction works and road closures on the Komoot route planner map.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "komoot-roadworks@cycling-construction-planning",
+      "strict_min_version": "128.0"
+    }
+  },
+
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.komoot.com/*",
+    "https://geo.api.vlaanderen.be/*",
+    "https://data.mobility.brussels/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.komoot.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://www.komoot.com/*"]
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Komoot Road Works"
+  }
+}

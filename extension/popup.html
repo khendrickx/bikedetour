@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Komoot Road Works</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 248px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 14px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    header .icon { font-size: 20px; line-height: 1; }
+    header h1   { font-size: 14px; font-weight: 700; }
+
+    /* ── Toggle row ── */
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .row .label { font-weight: 500; }
+
+    /* iOS-style toggle */
+    .switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .track {
+      position: absolute; inset: 0;
+      background: #ccc;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .track::after {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    input:checked + .track { background: #E53935; }
+    input:checked + .track::after { transform: translateX(18px); }
+
+    /* ── Sources section ── */
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #888;
+      margin: 12px 0 6px;
+    }
+
+    .source {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      color: #333;
+    }
+    .source.disabled { opacity: 0.45; }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.active  { background: #E53935; }
+    .dot.pending { background: #bbb; }
+
+    .badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .badge.live { background: #e8f5e9; color: #2e7d32; }
+    .badge.soon { background: #f3f4f6; color: #666; }
+
+    /* ── Status line ── */
+    #status {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #999;
+    }
+
+    /* ── Legend ── */
+    .legend { margin-top: 12px; border-top: 1px solid #f0f0f0; padding-top: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 12px; color: #555; }
+    .swatch {
+      width: 24px; height: 8px; border-radius: 2px; flex-shrink: 0;
+    }
+    .swatch.full    { background: #E53935; }
+    .swatch.partial { background: #FB8C00; }
+    .swatch.detour  { background: #1E88E5; border-top: 2px dashed #1E88E5; height: 4px; background: transparent; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="icon">🚧</span>
+    <h1>Komoot Road Works</h1>
+  </header>
+
+  <div class="row">
+    <span class="label">Show overlay</span>
+    <label class="switch">
+      <input type="checkbox" id="toggleOverlay" checked>
+      <span class="track"></span>
+    </label>
+  </div>
+
+  <div class="section-title">Data sources</div>
+
+  <div class="source">
+    <span class="dot active"></span>
+    <span>GIPOD — Flanders</span>
+    <span class="badge live">Live</span>
+  </div>
+  <div class="source disabled">
+    <span class="dot pending"></span>
+    <span>Brussels Mobility</span>
+    <span class="badge soon">Soon</span>
+  </div>
+  <div class="source disabled">
+    <span class="dot pending"></span>
+    <span>SPW — Wallonia</span>
+    <span class="badge soon">Soon</span>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="swatch full"></span> Closed to cyclists</div>
+    <div class="legend-item"><span class="swatch partial"></span> Limited access</div>
+    <div class="legend-item"><span class="swatch detour"></span> Diversion route</div>
+  </div>
+
+  <div id="status">No data loaded yet</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
