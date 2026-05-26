@@ -339,6 +339,8 @@
     // Add overlay layers once the map style is ready
     const doInit = () => {
       addLayers(map);
+      setVisible(map, overlayOn);
+      setLimitedVisible(map, showLimited);
       requestData(map);
     };
 
@@ -580,8 +582,6 @@
       : '<span style="color:#FB8C00;font-weight:bold">⚠️ Beperkte doorgang voor fietsers</span>';
     const locationLine = p.location
       ? `<div style="margin-top:4px;color:#555">📍 ${escHtml(p.location)}</div>` : '';
-    const infoLink = p.infoUrl
-      ? `<div style="margin-top:6px"><a href="${escHtml(p.infoUrl)}" target="_blank" rel="noopener noreferrer" style="color:#1565C0;text-decoration:none;font-size:12px">Meer info →</a></div>` : '';
     return `<div>
       <div style="font-weight:600;margin-bottom:4px;padding-right:18px">${escHtml(p.description || 'Wegwerken')}</div>
       ${severityBadge}
@@ -590,7 +590,6 @@
         📅 ${fmt(p.start)} → ${fmt(p.end)}<br>
         🏢 ${escHtml(p.owner || '—')}
       </div>
-      ${infoLink}
     </div>`;
   }
 

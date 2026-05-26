@@ -67,7 +67,6 @@ function normaliseHindrance(feature) {
       severity:    normaliseSeverity(p),
       owner:       p.HindranceOwner || '',
       consequence: p.ConsequenceTreeLevel1 || p.Consequence || '',
-      infoUrl:     p.HindranceUri || p.Uri || null,
     },
   };
 }
@@ -122,7 +121,6 @@ function normaliseBrusselsEvent(feature) {
       severity:    imp >= 3 ? 'full_closure' : 'partial',
       owner:       'Bruxelles Mobilité',
       consequence: p.consequences_fr || p.consequences_nl || '',
-      infoUrl:     null,
     },
   };
 }
@@ -194,7 +192,6 @@ function parseNdwXml(xml) {
       severity:    severity === 'highest' ? 'full_closure' : 'partial',
       owner:       srcName,
       consequence: '',
-      infoUrl:     null,
     };
 
     // Prefer GML linestrings (posList) — DATEX II uses lat/lon order in posList
@@ -287,7 +284,6 @@ function normaliseOsmElement(el) {
     severity,
     owner:       'OpenStreetMap',
     consequence: '',
-    infoUrl:     `https://www.openstreetmap.org/${id}`,
   };
 
   let geometry;
