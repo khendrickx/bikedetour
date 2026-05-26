@@ -35,6 +35,13 @@
     if (e.source !== window) return;
     if (!e.data || e.data.__rw !== FROM_PAGE) return;
 
+    if (e.data.type === 'RW_READY') {
+      chrome.storage.local.get(['overlayEnabled', 'showLimitedAccess'], ({ overlayEnabled, showLimitedAccess }) => {
+        window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE',         enabled: overlayEnabled    !== false }, '*');
+        window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE_LIMITED', enabled: showLimitedAccess !== false }, '*');
+      });
+    }
+
     if (e.data.type === 'RW_FETCH') {
       chrome.runtime.sendMessage(
         { type: 'FETCH_ROADWORKS', bbox: e.data.bbox },
@@ -77,9 +84,4 @@
     }
   });
 
-  // Apply persisted toggle state on page load
-  chrome.storage.local.get(['overlayEnabled', 'showLimitedAccess'], ({ overlayEnabled, showLimitedAccess }) => {
-    window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE',         enabled: overlayEnabled    !== false }, '*');
-    window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE_LIMITED', enabled: showLimitedAccess !== false }, '*');
-  });
 })();

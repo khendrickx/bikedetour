@@ -563,6 +563,9 @@
   // Start DOM-based detection (handles bundled MapLibre like Komoot)
   waitForMapViaDOM();
 
+  // Signal that the message listener is live; content.js responds with stored preferences.
+  toContent('RW_READY', {});
+
   // ── Utilities ────────────────────────────────────────────────────────────
 
   function escHtml(str) {
