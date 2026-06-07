@@ -89,6 +89,7 @@ class StravaAdapter {
     this._popupTimer   = null;
     this._popupDismiss = null;
     this._fetchTimer   = null;
+    this._hoverKey     = null;
   }
 
   // ── Public interface (mirrors RouteplannerAdapter) ────────────────────────
@@ -311,17 +312,47 @@ class StravaAdapter {
   }
 
   _addHoverListeners(map) {
-    const onHover = (e) => {
-      if (!e.features || !e.features.length) return;
-      this._cancelHide();
-      if (this._popupDismiss) this._popupDismiss();
-      this._popupDismiss = this._showPopup(map, e.lngLat, buildPopupHtml(e.features[0].properties));
-    };
+    const mapCanvas       = map.getCanvas();
+    const canvasContainer = map.getCanvasContainer();
 
-    const hoverLayers = [LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
-    hoverLayers.forEach((id) => {
-      map.on('mouseenter', id, (e) => { map.getCanvas().style.cursor = 'pointer'; onHover(e); });
-      map.on('mouseleave', id, ()  => { map.getCanvas().style.cursor = ''; this._scheduleHide(450); });
+    // Strava renders its own canvas on top of MapLibre's for route-drawing, blocking
+    // MapLibre's layer events. Listen on the container instead and query features manually.
+    const overlayCanvas = [...canvasContainer.querySelectorAll('canvas')]
+      .find(c => c !== mapCanvas) || mapCanvas;
+
+    const hoverLayerIds = [
+      LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE,
+      LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE,
+    ];
+
+    canvasContainer.addEventListener('mousemove', (e) => {
+      const rect  = mapCanvas.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const validLayers = hoverLayerIds.filter(id => map.getLayer(id));
+      if (!validLayers.length) return;
+
+      const features = map.queryRenderedFeatures(point, { layers: validLayers });
+      if (features.length > 0) {
+        const f   = features[0];
+        const key = f.layer.id + '|' + JSON.stringify(f.properties).slice(0, 60);
+        overlayCanvas.style.cursor = 'pointer';
+        this._cancelHide();
+        if (key !== this._hoverKey || !this._popupDismiss) {
+          if (this._popupDismiss) this._popupDismiss();
+          this._popupDismiss = this._showPopup(map, map.unproject(point), buildPopupHtml(f.properties));
+          this._hoverKey = key;
+        }
+      } else {
+        overlayCanvas.style.cursor = '';
+        this._hoverKey = null;
+        this._scheduleHide(450);
+      }
+    });
+
+    canvasContainer.addEventListener('mouseleave', () => {
+      overlayCanvas.style.cursor = '';
+      this._hoverKey = null;
+      this._scheduleHide(450);
     });
 
     map.on('style.load', () => this._requestData());
