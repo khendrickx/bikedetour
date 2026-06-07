@@ -86,7 +86,7 @@
     if (++pollCount > 150) { clearInterval(poll); return; }
 
     // Re-patch if mapboxgl appeared but wasn't caught by interceptor
-    if (window.mapboxgl && !window.mapboxgl.Map.__rwPatched) patchLib(window.mapboxgl);
+    if (window.mapboxgl && window.mapboxgl.Map && !window.mapboxgl.Map.__rwPatched) patchLib(window.mapboxgl);
 
     if (adapter._map) { clearInterval(poll); return; }
 
