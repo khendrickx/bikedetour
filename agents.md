@@ -14,6 +14,7 @@ Three-layer design with MV3 sandbox isolation:
 │  DataSource (abstract)  ←  GipodDataSource                 │
 │                         ←  BrusselsDataSource              │
 │                         ←  NdwDataSource                   │
+│                         ←  LuxembourgDataSource            │
 │                         ←  OsmDataSource                   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Feature[]
@@ -51,6 +52,7 @@ Each source is a class in `extension/datasources/` that extends `DataSource`. Th
 | GIPOD | `GipodDataSource` | Flanders, BE | OGC Features (GeoJSON) |
 | Brussels Mobility | `BrusselsDataSource` | Brussels, BE | WFS (GeoServer JSON) |
 | NDW | `NdwDataSource` | Netherlands | DATEX II XML, gzipped |
+| PCH Luxembourg | `LuxembourgDataSource` | Luxembourg | KML feed |
 | OpenStreetMap | `OsmDataSource` | Global | Overpass API (JSON) |
 
 ### Normalised feature schema
@@ -59,7 +61,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 
 ```js
 {
-  source:      'gipod' | 'brussels' | 'ndw' | 'osm',  // matches DataSource.id
+  source:      'gipod' | 'brussels' | 'ndw' | 'luxembourg' | 'osm',  // matches DataSource.id
   id:          string,
   description: string,
   start:       string | null,   // ISO date
@@ -76,11 +78,11 @@ All `fetchForBbox()` implementations must return features with these properties:
 | File | Role |
 |------|------|
 | `extension/datasources/DataSource.js` | Abstract base class. Declares `id`, `name`, `boundingBox`, `fetchForBbox()`, and a free `overlaps(bbox)` helper. |
-| `extension/datasources/Gipod\|Brussels\|Ndw\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
+| `extension/datasources/Gipod\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
 | `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { gipod, brussels, ndw, osm } }`. |
+| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { gipod, brussels, ndw, luxembourg, osm } }`. |
 | `extension/injected.js` | `KomootAdapter` class (implements RouteplannerAdapter interface) + Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
@@ -91,6 +93,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 
 - **Bbox tile cache** (`DataAggregator`): viewport snapped to 0.25° grid; up to 20 tiles in memory, 10-min TTL.
 - **NDW global cache** (`NdwDataSource`): separate 15-min TTL for the large gzipped DATEX II feed — downloaded once and then filtered per viewport in JS.
+- **Luxembourg global cache** (`LuxembourgDataSource`): same pattern as NDW — 15-min TTL for the KML feed (~1.4 MB), filtered per viewport in JS.
 - **Source resilience**: `Promise.allSettled()` in `DataAggregator` — one source failure never blocks the others. Failed sources return an empty `FeatureCollection`.
 - **Overpass mirrors**: uncomment endpoints in `OsmDataSource.OVERPASS_ENDPOINTS` to enable fallback mirrors.
 
@@ -104,6 +107,7 @@ Layers registered by `KomootAdapter._addLayers()` in `injected.js`:
 | `rw-outline` | `LAYER_OUTLINE` | `rw-gipod` | dashed line outline |
 | `rw-brussels-circle` | `LAYER_BRUSSELS_CIRCLE` | `rw-brussels` | circle (Brussels points) |
 | `rw-ndw-line` | `LAYER_NDW_LINE` | `rw-ndw` | solid line |
+| `rw-luxembourg-line` | `LAYER_LUXEMBOURG_LINE` | `rw-luxembourg` | solid line |
 | `rw-osm-fill` | `LAYER_OSM_FILL` | `rw-osm` | fill polygon (landuse=construction) |
 | `rw-osm-line` | `LAYER_OSM_LINE` | `rw-osm` | dashed line |
 | `rw-osm-circle` | `LAYER_OSM_CIRCLE` | `rw-osm` | circle (barrier=construction nodes) |
@@ -175,7 +179,7 @@ Read these before making significant changes to understand the intended design.
 - **Do not add `host_permissions` for Overpass endpoints** without reading the existing comments — they were intentionally omitted to avoid store review friction; `fetch()` from a service worker context is already permitted regardless.
 - **Style reloads**: Komoot switches map themes. `KomootAdapter._addHoverListeners()` re-triggers `_requestData()` on `style.load`, which re-adds all sources and layers. Any new layer must be in `_addLayers()` and `ALL_LAYERS`.
 - **MV3 service worker lifecycle**: the service worker can be terminated between requests. `DataAggregator._cache` is in-memory and will be empty after wake-up — this is fine because `fetchForBbox` rebuilds the cache on every miss.
-- **NDW cache lives in `NdwDataSource` instance**: the aggregator holds a single instance so the 15-min cache persists across viewport changes within the same service worker lifetime.
+- **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
 - **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
 - **`injected.js` is not an ES module**: it is injected as a plain `<script>` tag and cannot use `import`. All adapter code must be self-contained in the file. `extension/adapters/RouteplannerAdapter.js` is documentation, not a runtime dependency.
 - **Data key changed**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `gipod` (not `hindrances`) as the GIPOD source key. All three files must agree.

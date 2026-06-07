@@ -11,16 +11,18 @@
  *  4. Add a corresponding layer in injected.js → KomootAdapter._addLayers().
  */
 
-import { GipodDataSource }    from './datasources/GipodDataSource.js';
-import { BrusselsDataSource } from './datasources/BrusselsDataSource.js';
-import { NdwDataSource }      from './datasources/NdwDataSource.js';
-import { OsmDataSource }      from './datasources/OsmDataSource.js';
-import { DataAggregator }     from './logic/DataAggregator.js';
+import { GipodDataSource }      from './datasources/GipodDataSource.js';
+import { BrusselsDataSource }   from './datasources/BrusselsDataSource.js';
+import { NdwDataSource }        from './datasources/NdwDataSource.js';
+import { LuxembourgDataSource } from './datasources/LuxembourgDataSource.js';
+import { OsmDataSource }        from './datasources/OsmDataSource.js';
+import { DataAggregator }       from './logic/DataAggregator.js';
 
 const aggregator = new DataAggregator([
   new GipodDataSource(),
   new BrusselsDataSource(),
   new NdwDataSource(),
+  new LuxembourgDataSource(),
   new OsmDataSource(),
 ]);
 

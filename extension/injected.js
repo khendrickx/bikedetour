@@ -83,24 +83,27 @@
       }
 
       const empty = { type: 'FeatureCollection', features: [] };
-      const gipod   = dataBySource.gipod    || empty;
-      const brussels = dataBySource.brussels || empty;
-      const ndw      = dataBySource.ndw      || empty;
-      const osm      = dataBySource.osm      || empty;
+      const gipod      = dataBySource.gipod      || empty;
+      const brussels   = dataBySource.brussels   || empty;
+      const ndw        = dataBySource.ndw        || empty;
+      const luxembourg = dataBySource.luxembourg || empty;
+      const osm        = dataBySource.osm        || empty;
 
       const hSrc = map.getSource(SOURCE_GIPOD);
       const bSrc = map.getSource(SOURCE_BRUSSELS);
       const nSrc = map.getSource(SOURCE_NDW);
+      const lSrc = map.getSource(SOURCE_LUXEMBOURG);
       const oSrc = map.getSource(SOURCE_OSM);
       if (hSrc) hSrc.setData(gipod);
       if (bSrc) bSrc.setData(brussels);
       if (nSrc) nSrc.setData(ndw);
+      if (lSrc) lSrc.setData(luxembourg);
       if (oSrc) oSrc.setData(osm);
 
       const total = gipod.features.length + brussels.features.length +
-                    ndw.features.length   + osm.features.length;
+                    ndw.features.length   + luxembourg.features.length + osm.features.length;
       if (total > 0) {
-        console.log(`[RoadWorks] ${gipod.features.length} GIPOD, ${brussels.features.length} Brussels, ${ndw.features.length} NDW, ${osm.features.length} OSM`);
+        console.log(`[RoadWorks] ${gipod.features.length} GIPOD, ${brussels.features.length} Brussels, ${ndw.features.length} NDW, ${luxembourg.features.length} Luxembourg, ${osm.features.length} OSM`);
       }
     }
 
@@ -219,6 +222,22 @@
         });
       }
 
+      // ── Luxembourg PCH ───────────────────────────────────────────────────
+      if (!map.getSource(SOURCE_LUXEMBOURG)) {
+        map.addSource(SOURCE_LUXEMBOURG, { type: 'geojson', data: EMPTY_FC });
+      }
+      if (!map.getLayer(LAYER_LUXEMBOURG_LINE)) {
+        map.addLayer({
+          id: LAYER_LUXEMBOURG_LINE, type: 'line', source: SOURCE_LUXEMBOURG,
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color':   ['match', ['get', 'severity'], 'full_closure', '#E53935', '#FB8C00'],
+            'line-width':   5,
+            'line-opacity': 0.85,
+          },
+        });
+      }
+
       // ── OpenStreetMap (Overpass) — crimson-shifted to distinguish from GIPOD
       if (!map.getSource(SOURCE_OSM)) {
         map.addSource(SOURCE_OSM, { type: 'geojson', data: EMPTY_FC });
@@ -269,7 +288,7 @@
         this._popupDismiss = this._showPopup(map, e.lngLat, buildPopupHtml(e.features[0].properties));
       };
 
-      const hoverLayers = [LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
+      const hoverLayers = [LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
       hoverLayers.forEach((id) => {
         map.on('mouseenter', id, (e) => { map.getCanvas().style.cursor = 'pointer'; onHover(e); });
         map.on('mouseleave', id, ()  => { map.getCanvas().style.cursor = ''; this._scheduleHide(450); });
@@ -360,20 +379,22 @@
 
   // ── Layer / source constants ────────────────────────────────────────────────
 
-  const SOURCE_GIPOD   = 'rw-gipod';
-  const SOURCE_BRUSSELS = 'rw-brussels';
-  const SOURCE_NDW      = 'rw-ndw';
-  const SOURCE_OSM      = 'rw-osm';
+  const SOURCE_GIPOD      = 'rw-gipod';
+  const SOURCE_BRUSSELS   = 'rw-brussels';
+  const SOURCE_NDW        = 'rw-ndw';
+  const SOURCE_LUXEMBOURG = 'rw-luxembourg';
+  const SOURCE_OSM        = 'rw-osm';
 
-  const LAYER_FILL            = 'rw-fill';
-  const LAYER_OUTLINE         = 'rw-outline';
-  const LAYER_BRUSSELS_CIRCLE = 'rw-brussels-circle';
-  const LAYER_NDW_LINE        = 'rw-ndw-line';
-  const LAYER_OSM_FILL        = 'rw-osm-fill';
-  const LAYER_OSM_LINE        = 'rw-osm-line';
-  const LAYER_OSM_CIRCLE      = 'rw-osm-circle';
+  const LAYER_FILL             = 'rw-fill';
+  const LAYER_OUTLINE          = 'rw-outline';
+  const LAYER_BRUSSELS_CIRCLE  = 'rw-brussels-circle';
+  const LAYER_NDW_LINE         = 'rw-ndw-line';
+  const LAYER_LUXEMBOURG_LINE  = 'rw-luxembourg-line';
+  const LAYER_OSM_FILL         = 'rw-osm-fill';
+  const LAYER_OSM_LINE         = 'rw-osm-line';
+  const LAYER_OSM_CIRCLE       = 'rw-osm-circle';
 
-  const ALL_LAYERS = [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
+  const ALL_LAYERS = [LAYER_FILL, LAYER_OUTLINE, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
 
   // Base geometry-type filters — setLimitedVisible must compose with these.
   const LAYER_BASE_FILTER = {
