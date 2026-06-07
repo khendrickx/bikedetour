@@ -342,7 +342,8 @@ class StravaAdapter {
           this._popupDismiss = this._showPopup(map, map.unproject(point), buildPopupHtml(f.properties));
           this._hoverKey = key;
         }
-      } else {
+      } else if (this._hoverKey !== null) {
+        // Only trigger on the feature→nothing transition; mousemove fires faster than the timer.
         overlayCanvas.style.cursor = '';
         this._hoverKey = null;
         this._scheduleHide(450);
