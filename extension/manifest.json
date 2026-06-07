@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BikeDetour",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Overlay cycling construction works and road closures on route planner maps so you can detour around them. https://github.com/khendrickx/bikedetour",
 
   "permissions": ["storage"],
