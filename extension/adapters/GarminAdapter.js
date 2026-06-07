@@ -140,8 +140,8 @@ class GarminAdapter {
         },
         onEachFeature(feature, layer) {
           const html = buildPopupHtml(feature.properties);
-          layer.bindPopup(html, { maxWidth: 280 });
-          layer.on('mouseover', function () { this.openPopup(); });
+          layer.bindPopup(html, { maxWidth: 280, autoPan: false });
+          layer.on('mouseover', function (e) { this.openPopup(e.latlng); });
         },
       }).addTo(group);
     });
