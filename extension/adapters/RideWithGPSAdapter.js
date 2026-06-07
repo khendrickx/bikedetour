@@ -455,7 +455,6 @@ class RideWithGPSAdapter {
           const html = buildPopupHtml(feature.properties);
           layer.bindPopup(html, { maxWidth: 280 });
           layer.on('mouseover', function () { this.openPopup(); });
-          layer.on('mouseout',  function () { this.closePopup(); });
         },
       }).addTo(group);
     });
