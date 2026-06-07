@@ -24,9 +24,10 @@ Three-layer design with MV3 sandbox isolation:
 └──────────────────────────────┬──────────────────────────────┘
                                │ { sourceId: FeatureCollection }
 ┌──────────────────────────────▼──────────────────────────────┐
-│ Map Layer  (extension/adapters/ + injected-komoot.js / injected-ridewithgps.js) │
+│ Map Layer  (extension/adapters/ + injected scripts)                             │
 │  RouteplannerAdapter (interface)  ←  KomootAdapter                              │
 │                                   ←  RideWithGPSAdapter                         │
+│                                   ←  StravaAdapter                              │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,6 +90,9 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/content-ridewithgps.js` | Same bridge role as `content.js` but injects `RideWithGPSAdapter.js` then `injected-ridewithgps.js`. |
 | `extension/adapters/RideWithGPSAdapter.js` | `RideWithGPSAdapter` class. Detects map library at runtime (`_mapType`): MapLibre GL path uses sources/layers (same as KomootAdapter); Leaflet path uses `L.layerGroup` + `L.geoJSON`. Shared helpers: `toContent`, `escHtml`, `buildPopupHtml`, source/layer constants. |
 | `extension/injected-ridewithgps.js` | Thin orchestrator for RideWithGPS: instantiates `RideWithGPSAdapter`, wires messages, runs Leaflet + MapLibre detection (window interceptors + DOM polling). No React fiber walk. |
+| `extension/content-strava.js` | Content script for Strava. Injects `StravaAdapter.js` then `injected-strava.js`. Bridge logic identical to `content.js`. |
+| `extension/adapters/StravaAdapter.js` | `StravaAdapter` class + shared globals. Plain script (no IIFE). Implements RouteplannerAdapter via Mapbox GL JS API. |
+| `extension/injected-strava.js` | Thin orchestrator for Strava: `window.mapboxgl` interceptor + immediate check + DOM polling. No React fiber walk needed — Strava assigns `window.mapboxgl` explicitly. |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -193,3 +197,5 @@ Read these before making significant changes to understand the intended design.
 - **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected-komoot.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected-komoot.js` must stay in sync.
 - **RideWithGPS dual-library detection**: `RideWithGPSAdapter._mapType` is set once in `onMapReady` by checking `typeof map.getSource === 'function'`. All four interface methods branch on this flag. If you add a feature that behaves differently per library, add it to **both** branches and update the `_mapType` check if the heuristic ever proves unreliable.
 - **Leaflet `_lastData`**: `setLimitedVisible` on the Leaflet path re-calls `_applyDataLeaflet(this._lastData)`. If `_lastData` is `null` (no data fetched yet), the call is skipped. This is intentional — the filter will be applied on the next `applyData` call.
+- **Strava URL redirect**: `https://www.strava.com/routes/new` server-redirects to `https://www.strava.com/maps/create`. The content script match must include `https://www.strava.com/maps/*` — matching only `/routes/*` means the script never runs.
+- **Strava uses Mapbox GL (not MapLibre)**: Strava bundles Mapbox GL internally and assigns it to `window.mapboxgl`. The injected script intercepts that assignment. Do not add `maplibregl` interceptor logic — it is unused and would add dead code.
