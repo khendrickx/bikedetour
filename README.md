@@ -114,15 +114,15 @@ The extension is split into three layers:
 - Applying incoming `dataBySource` to the map
 - Responding to `setVisible` / `setLimitedVisible` commands
 
-`KomootAdapter` (inside `injected.js`) implements this interface for Komoot's bundled MapLibre GL instance.
+`KomootAdapter` (inside `injected-komoot.js`) implements this interface for Komoot's bundled MapLibre GL instance.
 
 ### Extension plumbing
 
 ```
 popup.html/popup.js  →  chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
-content.js           →  injects injected.js; bridges RW_FETCH ↔ FETCH_ROADWORKS
+content.js           →  injects injected-komoot.js; bridges RW_FETCH ↔ FETCH_ROADWORKS
 background.js        →  service worker; DataAggregator.fetchForBbox()
-injected.js          →  KomootAdapter; patches/detects MapLibre; renders overlay
+injected-komoot.js   →  KomootAdapter; patches/detects MapLibre; renders overlay
 ```
 
 ### Normalised feature schema
@@ -210,7 +210,7 @@ const aggregator = new DataAggregator([
 ]
 ```
 
-**4. Add a map layer in `injected.js` → `KomootAdapter._addLayers()`**
+**4. Add a map layer in `injected-komoot.js` → `KomootAdapter._addLayers()`**
 
 Add a new source and layer block inside `_addLayers`. The source name must match your `DataSource.id`:
 
@@ -274,7 +274,7 @@ extension/injected-myservice.js          ← page-context script; contains the
                                             adapter class + map detection logic
 ```
 
-Copy `extension/injected.js` as a starting point. Key areas to change:
+Copy `extension/injected-komoot.js` as a starting point. Key areas to change:
 
 - **Map detection**: Replace the `patchLib` / fiber-walk logic with whatever method detects the target site's map instance (constructor intercept, `MutationObserver`, polling for a known SDK global, etc.).
 - **Layer implementation**: Implement `_addLayers` for the target SDK (Leaflet, OpenLayers, Google Maps, …). Keep the same source/layer naming conventions.

@@ -15,7 +15,7 @@
  *  2. Override `id`, `name`, `boundingBox`, and `fetchForBbox`.
  *  3. Register an instance in `background.js` → DataAggregator constructor.
  *  4. Add the host to `manifest.json` → `host_permissions` (and the Firefox copy).
- *  5. Add a layer in `injected.js` → `KomootAdapter._addLayers`.
+ *  5. Add a layer in `injected-komoot.js` → `KomootAdapter._addLayers`.
  *
  * See README.md § "Adding a new data source" for the full walkthrough.
  */

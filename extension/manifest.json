@@ -27,13 +27,25 @@
       "matches": ["https://www.komoot.com/*"],
       "js": ["content.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://ridewithgps.com/routes/new",
+        "https://ridewithgps.com/routes/*"
+      ],
+      "js": ["content-ridewithgps.js"],
+      "run_at": "document_start"
     }
   ],
 
   "web_accessible_resources": [
     {
-      "resources": ["adapters/KomootAdapter.js", "injected.js"],
+      "resources": ["adapters/KomootAdapter.js", "injected-komoot.js"],
       "matches": ["https://www.komoot.com/*"]
+    },
+    {
+      "resources": ["adapters/RideWithGPSAdapter.js", "injected-ridewithgps.js"],
+      "matches": ["https://ridewithgps.com/*"]
     }
   ],
 

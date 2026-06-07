@@ -8,7 +8,7 @@
  *  1. Create datasources/<Name>DataSource.js (extend DataSource).
  *  2. Import and register it below.
  *  3. Add a host_permission entry in manifest.json.
- *  4. Add a corresponding layer in injected.js → KomootAdapter._addLayers().
+ *  4. Add a corresponding layer in injected-komoot.js → KomootAdapter._addLayers().
  */
 
 import { FlandersDataSource }    from './datasources/FlandersDataSource.js';

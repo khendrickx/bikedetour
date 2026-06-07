@@ -1,13 +1,12 @@
 /**
- * KomootAdapter — page-context script, injected before injected-komoot.js.
+ * RideWithGPSAdapter — page-context script, injected before injected-ridewithgps.js.
  *
- * Defines globals used by injected-komoot.js:
- *   - toContent(type, payload)  — send a postMessage to content.js
- *   - KomootAdapter             — the adapter class
+ * Defines globals used by injected-ridewithgps.js:
+ *   - toContent(type, payload)  — send a postMessage to content-ridewithgps.js
+ *   - RideWithGPSAdapter        — the adapter class
  *
- * This file is NOT an ES module (no import/export). It is injected as a
- * plain <script> tag so its top-level declarations become page globals,
- * accessible to the injected-komoot.js script that loads after it.
+ * Supports both MapLibre GL (map.getSource exists) and Leaflet (L.geoJSON).
+ * Library is detected once in onMapReady() and stored as this._mapType.
  */
 
 // ── Message bridge (page → content) ──────────────────────────────────────────
@@ -41,7 +40,6 @@ const ALL_LAYERS = [
   LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE,
 ];
 
-// Base geometry-type filters — setLimitedVisible must compose with these.
 const LAYER_BASE_FILTER = {
   [LAYER_OSM_FILL]:   ['==', '$type', 'Polygon'],
   [LAYER_OSM_LINE]:   ['in', '$type', 'LineString', 'Polygon'],
@@ -50,7 +48,10 @@ const LAYER_BASE_FILTER = {
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] };
 
-// ── Popup helpers ─────────────────────────────────────────────────────────────
+// Ordered list of source keys matching DataSource.id values
+const SOURCE_KEYS = ['flanders', 'brussels', 'ndw', 'luxembourg', 'osm'];
+
+// ── Popup helpers (shared by both map library paths) ─────────────────────────
 
 function escHtml(str) {
   return String(str)
@@ -80,33 +81,89 @@ function buildPopupHtml(p) {
   </div>`;
 }
 
-// ── KomootAdapter ─────────────────────────────────────────────────────────────
-//
-// Implements the RouteplannerAdapter interface (see RouteplannerAdapter.js) for
-// the Komoot route planner. Manages MapLibre sources, layers, hover popups, and
-// visibility toggling.
+// ── RideWithGPSAdapter ────────────────────────────────────────────────────────
 
-class KomootAdapter {
+class RideWithGPSAdapter {
   constructor() {
     this._map          = null;
+    this._mapType      = null;   // 'maplibre' | 'leaflet'
     this._overlayOn    = true;
     this._showLimited  = true;
+    this._fetchTimer   = null;
+    this._lastData     = null;
+
+    // MapLibre-specific popup state
     this._popupTimer   = null;
     this._popupDismiss = null;
-    this._fetchTimer   = null;
+
+    // Leaflet-specific: one L.layerGroup per source key
+    this._leafletLayers = null;
   }
 
-  // ── Public interface (mirrors RouteplannerAdapter) ────────────────────────
+  // ── Public interface ──────────────────────────────────────────────────────
 
   onMapReady(map) {
     if (this._map === map) return;
     this._map = map;
-    console.log('[RoadWorks] Map detected ✓');
+    this._mapType = typeof map.getSource === 'function' ? 'maplibre' : 'leaflet';
+    console.log(`[BikeDetour] RideWithGPS map detected (${this._mapType}) ✓`);
 
-    this._addHoverListeners(map);
+    if (this._mapType === 'maplibre') {
+      this._onMapReadyMapLibre(map);
+    } else {
+      this._onMapReadyLeaflet(map);
+    }
+  }
+
+  applyData(dataBySource) {
+    if (!this._map) return;
+    this._lastData = dataBySource;
+
+    if (this._mapType === 'maplibre') {
+      this._applyDataMapLibre(dataBySource);
+    } else {
+      this._applyDataLeaflet(dataBySource);
+    }
+  }
+
+  setVisible(visible) {
+    this._overlayOn = visible;
+    if (!this._map) return;
+
+    if (this._mapType === 'maplibre') {
+      const v = visible ? 'visible' : 'none';
+      ALL_LAYERS.forEach((id) => {
+        if (this._map.getLayer(id)) this._map.setLayoutProperty(id, 'visibility', v);
+      });
+    } else {
+      this._setVisibleLeaflet(visible);
+    }
+  }
+
+  setLimitedVisible(showLimited) {
+    this._showLimited = showLimited;
+    if (!this._map) return;
+
+    if (this._mapType === 'maplibre') {
+      const severityFilter = ['==', ['get', 'severity'], 'full_closure'];
+      ALL_LAYERS.forEach((id) => {
+        if (!this._map.getLayer(id)) return;
+        const base = LAYER_BASE_FILTER[id] || null;
+        const filter = showLimited ? base : (base ? ['all', base, severityFilter] : severityFilter);
+        this._map.setFilter(id, filter);
+      });
+    } else if (this._lastData) {
+      this._applyDataLeaflet(this._lastData);
+    }
+  }
+
+  // ── MapLibre path ─────────────────────────────────────────────────────────
+
+  _onMapReadyMapLibre(map) {
+    this._addHoverListenersMapLibre(map);
 
     const doInit = () => {
-      this._addLayers(map);
+      this._addLayersMapLibre(map);
       this.setVisible(this._overlayOn);
       this.setLimitedVisible(this._showLimited);
       this._requestData();
@@ -121,89 +178,30 @@ class KomootAdapter {
     map.on('moveend', () => this._requestData());
   }
 
-  applyData(dataBySource) {
+  _applyDataMapLibre(dataBySource) {
     const map = this._map;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map.isStyleLoaded()) return;
 
     if (!map.getLayer(LAYER_FILL)) {
-      this._addLayers(map);
+      this._addLayersMapLibre(map);
       this.setLimitedVisible(this._showLimited);
     }
 
-    const empty      = EMPTY_FC;
-    const flanders   = dataBySource.flanders   || empty;
-    const brussels   = dataBySource.brussels   || empty;
-    const ndw        = dataBySource.ndw        || empty;
-    const luxembourg = dataBySource.luxembourg || empty;
-    const osm        = dataBySource.osm        || empty;
-
+    const empty = EMPTY_FC;
     const fSrc = map.getSource(SOURCE_FLANDERS);
     const bSrc = map.getSource(SOURCE_BRUSSELS);
     const nSrc = map.getSource(SOURCE_NDW);
     const lSrc = map.getSource(SOURCE_LUXEMBOURG);
     const oSrc = map.getSource(SOURCE_OSM);
-    if (fSrc) fSrc.setData(flanders);
-    if (bSrc) bSrc.setData(brussels);
-    if (nSrc) nSrc.setData(ndw);
-    if (lSrc) lSrc.setData(luxembourg);
-    if (oSrc) oSrc.setData(osm);
-
-    const total = flanders.features.length + brussels.features.length +
-                  ndw.features.length      + luxembourg.features.length + osm.features.length;
-    if (total > 0) {
-      console.log(`[RoadWorks] ${flanders.features.length} Flanders, ${brussels.features.length} Brussels, ${ndw.features.length} NDW, ${luxembourg.features.length} Luxembourg, ${osm.features.length} OSM`);
-    }
+    if (fSrc) fSrc.setData(dataBySource.flanders   || empty);
+    if (bSrc) bSrc.setData(dataBySource.brussels   || empty);
+    if (nSrc) nSrc.setData(dataBySource.ndw        || empty);
+    if (lSrc) lSrc.setData(dataBySource.luxembourg || empty);
+    if (oSrc) oSrc.setData(dataBySource.osm        || empty);
   }
 
-  setVisible(visible) {
-    this._overlayOn = visible;
-    const map = this._map;
-    if (!map) return;
-    const v = visible ? 'visible' : 'none';
-    ALL_LAYERS.forEach((id) => {
-      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
-    });
-  }
-
-  setLimitedVisible(showLimited) {
-    this._showLimited = showLimited;
-    const map = this._map;
-    if (!map) return;
-    const severityFilter = ['==', ['get', 'severity'], 'full_closure'];
-    ALL_LAYERS.forEach((id) => {
-      if (!map.getLayer(id)) return;
-      const base = LAYER_BASE_FILTER[id] || null;
-      const filter = showLimited ? base : (base ? ['all', base, severityFilter] : severityFilter);
-      map.setFilter(id, filter);
-    });
-  }
-
-  // ── Private helpers ───────────────────────────────────────────────────────
-
-  _requestData() {
-    const map = this._map;
-    if (!map || !this._overlayOn) return;
-    if (map.getZoom() < 8) return;
-
-    clearTimeout(this._fetchTimer);
-    this._fetchTimer = setTimeout(() => {
-      const b = map.getBounds();
-      toContent('RW_FETCH', {
-        bbox: {
-          west:  b.getWest(),
-          south: b.getSouth(),
-          east:  b.getEast(),
-          north: b.getNorth(),
-        },
-      });
-    }, 300);
-  }
-
-  _addLayers(map) {
-    // ── Flanders (GIPOD) ───────────────────────────────────────────────────
-    if (!map.getSource(SOURCE_FLANDERS)) {
-      map.addSource(SOURCE_FLANDERS, { type: 'geojson', data: EMPTY_FC });
-    }
+  _addLayersMapLibre(map) {
+    if (!map.getSource(SOURCE_FLANDERS)) map.addSource(SOURCE_FLANDERS, { type: 'geojson', data: EMPTY_FC });
     if (!map.getLayer(LAYER_FILL)) {
       map.addLayer({
         id: LAYER_FILL, type: 'fill', source: SOURCE_FLANDERS,
@@ -224,10 +222,7 @@ class KomootAdapter {
       });
     }
 
-    // ── Brussels Mobility ─────────────────────────────────────────────────
-    if (!map.getSource(SOURCE_BRUSSELS)) {
-      map.addSource(SOURCE_BRUSSELS, { type: 'geojson', data: EMPTY_FC });
-    }
+    if (!map.getSource(SOURCE_BRUSSELS)) map.addSource(SOURCE_BRUSSELS, { type: 'geojson', data: EMPTY_FC });
     if (!map.getLayer(LAYER_BRUSSELS_CIRCLE)) {
       map.addLayer({
         id: LAYER_BRUSSELS_CIRCLE, type: 'circle', source: SOURCE_BRUSSELS,
@@ -241,10 +236,7 @@ class KomootAdapter {
       });
     }
 
-    // ── NDW (Netherlands) ─────────────────────────────────────────────────
-    if (!map.getSource(SOURCE_NDW)) {
-      map.addSource(SOURCE_NDW, { type: 'geojson', data: EMPTY_FC });
-    }
+    if (!map.getSource(SOURCE_NDW)) map.addSource(SOURCE_NDW, { type: 'geojson', data: EMPTY_FC });
     if (!map.getLayer(LAYER_NDW_LINE)) {
       map.addLayer({
         id: LAYER_NDW_LINE, type: 'line', source: SOURCE_NDW,
@@ -257,10 +249,7 @@ class KomootAdapter {
       });
     }
 
-    // ── Luxembourg PCH ────────────────────────────────────────────────────
-    if (!map.getSource(SOURCE_LUXEMBOURG)) {
-      map.addSource(SOURCE_LUXEMBOURG, { type: 'geojson', data: EMPTY_FC });
-    }
+    if (!map.getSource(SOURCE_LUXEMBOURG)) map.addSource(SOURCE_LUXEMBOURG, { type: 'geojson', data: EMPTY_FC });
     if (!map.getLayer(LAYER_LUXEMBOURG_LINE)) {
       map.addLayer({
         id: LAYER_LUXEMBOURG_LINE, type: 'line', source: SOURCE_LUXEMBOURG,
@@ -273,10 +262,7 @@ class KomootAdapter {
       });
     }
 
-    // ── OpenStreetMap (Overpass) — crimson-shifted to distinguish from Flanders
-    if (!map.getSource(SOURCE_OSM)) {
-      map.addSource(SOURCE_OSM, { type: 'geojson', data: EMPTY_FC });
-    }
+    if (!map.getSource(SOURCE_OSM)) map.addSource(SOURCE_OSM, { type: 'geojson', data: EMPTY_FC });
     if (!map.getLayer(LAYER_OSM_FILL)) {
       map.addLayer({
         id: LAYER_OSM_FILL, type: 'fill', source: SOURCE_OSM,
@@ -315,7 +301,7 @@ class KomootAdapter {
     }
   }
 
-  _addHoverListeners(map) {
+  _addHoverListenersMapLibre(map) {
     const onHover = (e) => {
       if (!e.features || !e.features.length) return;
       this._cancelHide();
@@ -323,13 +309,15 @@ class KomootAdapter {
       this._popupDismiss = this._showPopup(map, e.lngLat, buildPopupHtml(e.features[0].properties));
     };
 
-    const hoverLayers = [LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE, LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE];
+    const hoverLayers = [
+      LAYER_FILL, LAYER_BRUSSELS_CIRCLE, LAYER_NDW_LINE,
+      LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE,
+    ];
     hoverLayers.forEach((id) => {
       map.on('mouseenter', id, (e) => { map.getCanvas().style.cursor = 'pointer'; onHover(e); });
       map.on('mouseleave', id, ()  => { map.getCanvas().style.cursor = ''; this._scheduleHide(450); });
     });
 
-    // Re-add layers after Komoot theme switch (style reload clears all layers)
     map.on('style.load', () => this._requestData());
   }
 
@@ -409,5 +397,97 @@ class KomootAdapter {
 
   _cancelHide() {
     clearTimeout(this._popupTimer);
+  }
+
+  // ── Leaflet path ──────────────────────────────────────────────────────────
+
+  _onMapReadyLeaflet(map) {
+    this._initLeafletLayers(map);
+    this.setVisible(this._overlayOn);
+    this._requestData();
+    map.on('moveend', () => this._requestData());
+  }
+
+  _initLeafletLayers(map) {
+    this._leafletLayers = {};
+    SOURCE_KEYS.forEach((key) => {
+      this._leafletLayers[key] = window.L.layerGroup().addTo(map);
+    });
+  }
+
+  _applyDataLeaflet(dataBySource) {
+    if (!this._leafletLayers) this._initLeafletLayers(this._map);
+
+    SOURCE_KEYS.forEach((key) => {
+      const group = this._leafletLayers[key];
+      group.clearLayers();
+
+      const fc = dataBySource[key] || EMPTY_FC;
+      const filtered = this._showLimited
+        ? fc
+        : { ...fc, features: fc.features.filter((f) => f.properties.severity === 'full_closure') };
+
+      if (filtered.features.length === 0) return;
+
+      window.L.geoJSON(filtered, {
+        style(feature) {
+          const full = feature.properties.severity === 'full_closure';
+          return {
+            color:       full ? '#B71C1C' : '#E65100',
+            fillColor:   full ? '#E53935' : '#FB8C00',
+            weight:      2,
+            opacity:     0.85,
+            fillOpacity: 0.35,
+            dashArray:   '5, 4',
+          };
+        },
+        pointToLayer(feature, latlng) {
+          const full = feature.properties.severity === 'full_closure';
+          return window.L.circleMarker(latlng, {
+            radius:      9,
+            color:       '#fff',
+            weight:      2,
+            fillColor:   full ? '#E53935' : '#FB8C00',
+            fillOpacity: 0.9,
+          });
+        },
+        onEachFeature(feature, layer) {
+          const html = buildPopupHtml(feature.properties);
+          layer.bindPopup(html, { maxWidth: 280 });
+          layer.on('mouseover', function () { this.openPopup(); });
+        },
+      }).addTo(group);
+    });
+  }
+
+  _setVisibleLeaflet(visible) {
+    if (!this._leafletLayers) return;
+    SOURCE_KEYS.forEach((key) => {
+      if (visible) {
+        this._leafletLayers[key].addTo(this._map);
+      } else {
+        this._leafletLayers[key].remove();
+      }
+    });
+  }
+
+  // ── Shared helpers ────────────────────────────────────────────────────────
+
+  _requestData() {
+    if (!this._map || !this._overlayOn) return;
+    if (this._map.getZoom() < 8) return;
+
+    clearTimeout(this._fetchTimer);
+    this._fetchTimer = setTimeout(() => {
+      const b = this._map.getBounds();
+      toContent('RW_FETCH', {
+        bbox: {
+          west:  b.getWest(),
+          south: b.getSouth(),
+          east:  b.getEast(),
+          north: b.getNorth(),
+        },
+      });
+    }, 300);
   }
 }

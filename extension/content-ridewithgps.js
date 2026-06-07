@@ -1,11 +1,11 @@
 /**
- * content.js — Content Script
- * Injected into every komoot.com page at document_start.
+ * content-ridewithgps.js — Content Script for RideWithGPS
+ * Injected into ridewithgps.com/routes/* at document_start.
  *
  * Responsibilities:
- *  1. Inject injected-komoot.js into the page context so it can access window.mapboxgl.
- *  2. Bridge data requests from injected-komoot.js → background service worker.
- *  3. Forward toggle commands from the popup → injected-komoot.js.
+ *  1. Inject RideWithGPSAdapter.js + injected-ridewithgps.js into the page context.
+ *  2. Bridge data requests from injected-ridewithgps.js → background service worker.
+ *  3. Forward toggle commands from the popup → injected-ridewithgps.js.
  */
 
 (function () {
@@ -14,13 +14,7 @@
   const FROM_PAGE    = 'rw-from-page';
   const FROM_CONTENT = 'rw-from-content';
 
-  // ── 1. Inject page-context script ────────────────────────────────────────
-  // Must happen as early as possible (document_start) so the patch is in place
-  // before Komoot's bundle assigns window.mapboxgl.
-
-  // Scripts are injected sequentially: the adapter must be defined before
-  // injected-komoot.js runs, so we wait for each script's load event before appending
-  // the next one.
+  // ── 1. Inject page-context scripts ────────────────────────────────────────
   function injectScript(path, next) {
     const script = document.createElement('script');
     script.src = chrome.runtime.getURL(path);
@@ -28,10 +22,9 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
-  injectScript('adapters/KomootAdapter.js', () => injectScript('injected-komoot.js'));
+  injectScript('adapters/RideWithGPSAdapter.js', () => injectScript('injected-ridewithgps.js'));
 
   // ── 2. Bridge: page → background ─────────────────────────────────────────
-
   window.addEventListener('message', (e) => {
     if (e.source !== window) return;
     if (!e.data || e.data.__rw !== FROM_PAGE) return;
@@ -64,21 +57,12 @@
   });
 
   // ── 3. Bridge: popup → page ───────────────────────────────────────────────
-
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'TOGGLE') {
-      window.postMessage({
-        __rw:    FROM_CONTENT,
-        type:    'RW_TOGGLE',
-        enabled: message.enabled,
-      }, '*');
+      window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE',         enabled: message.enabled }, '*');
     }
     if (message.type === 'TOGGLE_LIMITED') {
-      window.postMessage({
-        __rw:    FROM_CONTENT,
-        type:    'RW_TOGGLE_LIMITED',
-        enabled: message.enabled,
-      }, '*');
+      window.postMessage({ __rw: FROM_CONTENT, type: 'RW_TOGGLE_LIMITED', enabled: message.enabled }, '*');
     }
   });
 
