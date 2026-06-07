@@ -24,9 +24,10 @@ Three-layer design with MV3 sandbox isolation:
 └──────────────────────────────┬──────────────────────────────┘
                                │ { sourceId: FeatureCollection }
 ┌──────────────────────────────▼──────────────────────────────┐
-│ Map Layer  (extension/adapters/ + injected-komoot.js)              │
-│  RouteplannerAdapter (interface)  ←  KomootAdapter          │
-└─────────────────────────────────────────────────────────────┘
+│ Map Layer  (extension/adapters/ + injected-komoot.js / injected-ridewithgps.js) │
+│  RouteplannerAdapter (interface)  ←  KomootAdapter                              │
+│                                   ←  RideWithGPSAdapter                         │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Extension plumbing on top of the three layers:
@@ -85,6 +86,9 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
 | `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
 | `extension/injected-komoot.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
+| `extension/content-ridewithgps.js` | Same bridge role as `content.js` but injects `RideWithGPSAdapter.js` then `injected-ridewithgps.js`. |
+| `extension/adapters/RideWithGPSAdapter.js` | `RideWithGPSAdapter` class. Detects map library at runtime (`_mapType`): MapLibre GL path uses sources/layers (same as KomootAdapter); Leaflet path uses `L.layerGroup` + `L.geoJSON`. Shared helpers: `toContent`, `escHtml`, `buildPopupHtml`, source/layer constants. |
+| `extension/injected-ridewithgps.js` | Thin orchestrator for RideWithGPS: instantiates `RideWithGPSAdapter`, wires messages, runs Leaflet + MapLibre detection (window interceptors + DOM polling). No React fiber walk. |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -187,3 +191,5 @@ Read these before making significant changes to understand the intended design.
 - **Page-context scripts are not ES modules**: `adapters/KomootAdapter.js` and `injected-komoot.js` are injected as plain `<script>` tags and cannot use `import`. `KomootAdapter.js` defines globals (no IIFE); `injected-komoot.js` consumes them. Both must be listed in `web_accessible_resources`. `RouteplannerAdapter.js` is documentation only, not a runtime dependency.
 - **Injection order matters**: `content.js` injects `KomootAdapter.js` first and waits for its `load` event before injecting `injected-komoot.js`. If you add another adapter script, follow the same sequential pattern.
 - **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected-komoot.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected-komoot.js` must stay in sync.
+- **RideWithGPS dual-library detection**: `RideWithGPSAdapter._mapType` is set once in `onMapReady` by checking `typeof map.getSource === 'function'`. All four interface methods branch on this flag. If you add a feature that behaves differently per library, add it to **both** branches and update the `_mapType` check if the heuristic ever proves unreliable.
+- **Leaflet `_lastData`**: `setLimitedVisible` on the Leaflet path re-calls `_applyDataLeaflet(this._lastData)`. If `_lastData` is `null` (no data fetched yet), the call is skipped. This is intentional — the filter will be applied on the next `applyData` call.
