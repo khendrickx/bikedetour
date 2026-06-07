@@ -18,16 +18,17 @@
   // Must happen as early as possible (document_start) so the patch is in place
   // before Komoot's bundle assigns window.mapboxgl.
 
-  function injectPageScript() {
+  // Scripts are injected sequentially: the adapter must be defined before
+  // injected.js runs, so we wait for each script's load event before appending
+  // the next one.
+  function injectScript(path, next) {
     const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('injected.js');
-    // Remove the tag after execution to keep the DOM clean
-    script.addEventListener('load', () => script.remove());
-    // documentElement (<html>) always exists at document_start
+    script.src = chrome.runtime.getURL(path);
+    script.addEventListener('load', () => { script.remove(); if (next) next(); });
     (document.head || document.documentElement).appendChild(script);
   }
 
-  injectPageScript();
+  injectScript('adapters/KomootAdapter.js', () => injectScript('injected.js'));
 
   // ── 2. Bridge: page → background ─────────────────────────────────────────
 
@@ -52,12 +53,9 @@
           }
           if (response && response.success) {
             window.postMessage({
-              __rw:       FROM_CONTENT,
-              type:       'RW_DATA',
-              hindrances: response.data.hindrances,
-              brussels:   response.data.brussels,
-              ndw:        response.data.ndw,
-              osm:        response.data.osm,
+              __rw: FROM_CONTENT,
+              type: 'RW_DATA',
+              data: response.data,
             }, '*');
           }
         }

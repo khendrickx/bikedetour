@@ -6,36 +6,62 @@ A Chrome/Firefox extension (Manifest V3) that overlays cycling construction work
 
 ## Architecture
 
-Three-layer browser extension with MV3 sandbox isolation:
+Three-layer design with MV3 sandbox isolation:
 
 ```
-popup.html / popup.js          ← user toggles (chrome.storage.local)
+┌─────────────────────────────────────────────────────────────┐
+│ Data Input Layer  (extension/datasources/)                  │
+│  DataSource (abstract)  ←  FlandersDataSource               │
+│                         ←  BrusselsDataSource              │
+│                         ←  NdwDataSource                   │
+│                         ←  LuxembourgDataSource            │
+│                         ←  OsmDataSource                   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Feature[]
+┌──────────────────────────────▼──────────────────────────────┐
+│ Logic Layer  (extension/logic/)                             │
+│  DataAggregator  (fan-out, per-bbox caching, resilience)    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ { sourceId: FeatureCollection }
+┌──────────────────────────────▼──────────────────────────────┐
+│ Map Layer  (extension/adapters/ + injected.js)              │
+│  RouteplannerAdapter (interface)  ←  KomootAdapter          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+Extension plumbing on top of the three layers:
+
+```
+popup.html / popup.js   ← chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
        ↕ chrome.runtime.sendMessage
-content.js                     ← content script, injected at document_start
+content.js              ← bridges RW_FETCH ↔ FETCH_ROADWORKS; injects injected.js
        ↕ window.postMessage
-injected.js                    ← runs in page context, patches maplibregl
-       ↕ MapLibre map instance (Komoot's bundled copy)
-background.js                  ← service worker, fetches & caches geo data
+injected.js (KomootAdapter) ← page context; patches/detects MapLibre; renders overlay
+       ↕
+background.js           ← service worker; DataAggregator.fetchForBbox()
 ```
 
 **Why the indirection:** MV3 content scripts cannot access objects created by the host page's JS. `injected.js` is inserted into the page's JS context via `content.js` so it can intercept Komoot's MapLibre instance.
 
 ## Data Sources
 
-All sources are fetched by `background.js` and normalised to a common GeoJSON property schema before being returned to `injected.js`.
+Each source is a class in `extension/datasources/` that extends `DataSource`. The `DataAggregator` in `background.js` instantiates them and calls `fetchForBbox(bbox)` only when the viewport overlaps the source's declared `boundingBox`.
 
-| Source | Coverage | API style | Key file section |
-|--------|----------|-----------|-----------------|
-| GIPOD | Flanders, BE | OGC Features (GeoJSON) | `fetchGipod()` |
-| Brussels Mobility | Brussels, BE | WFS (GeoServer JSON) | `fetchBrussels()` |
-| NDW | Netherlands | DATEX II XML, gzipped | `fetchNdw()` |
-| OpenStreetMap | Global | Overpass API (JSON) | `fetchOsm()` |
+| Source | Class | Coverage | API style |
+|--------|-------|----------|-----------|
+| Flanders (GIPOD) | `FlandersDataSource` | Flanders, BE | OGC Features (GeoJSON) |
+| Brussels Mobility | `BrusselsDataSource` | Brussels, BE | WFS (GeoServer JSON) |
+| NDW | `NdwDataSource` | Netherlands | DATEX II XML, gzipped |
+| PCH Luxembourg | `LuxembourgDataSource` | Luxembourg | KML feed |
+| OpenStreetMap | `OsmDataSource` | Global | Overpass API (JSON) |
 
 ### Normalised feature schema
 
+All `fetchForBbox()` implementations must return features with these properties:
+
 ```js
 {
-  source:      'gipod' | 'brussels' | 'ndw' | 'osm',
+  source:      'flanders' | 'brussels' | 'ndw' | 'luxembourg' | 'osm',  // matches DataSource.id
   id:          string,
   description: string,
   start:       string | null,   // ISO date
@@ -51,53 +77,63 @@ All sources are fetched by `background.js` and normalised to a common GeoJSON pr
 
 | File | Role |
 |------|------|
-| `extension/background.js` | Service worker. Fetches all four sources, normalises, caches by 0.25° bbox tile (10 min TTL). Returns merged GeoJSON FeatureCollection. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. |
-| `extension/injected.js` | Patches `window.mapboxgl` / `maplibregl` to capture map instance. Adds GeoJSON sources + 7 layers. Renders hover popups. Re-requests data on pan/zoom/style-reload. |
+| `extension/datasources/DataSource.js` | Abstract base class. Declares `id`, `name`, `boundingBox`, `fetchForBbox()`, and a free `overlaps(bbox)` helper. |
+| `extension/datasources/Flanders\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
+| `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
+| `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
+| `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected.js`. |
+| `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
+| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
+| `extension/injected.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
-| `extension/manifest.json` | Chrome MV3 manifest. |
-| `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background script declaration). |
+| `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
+| `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
 | `build.sh` | Packages unpacked dirs and zip archives for Chrome Web Store and Firefox AMO. |
 
 ## Caching Strategy
 
-- **Bbox tile cache** (`background.js`): viewport snapped to 0.25° grid; up to 20 tiles kept in memory with a 10-minute TTL.
-- **NDW global cache**: separate 15-minute TTL for the large gzipped DATEX II feed.
-- **Source resilience**: `Promise.allSettled()` — one source failure never blocks the others.
-- **Overpass mirrors**: four fallback endpoints tried in order.
+- **Bbox tile cache** (`DataAggregator`): viewport snapped to 0.25° grid; up to 20 tiles in memory, 10-min TTL.
+- **NDW global cache** (`NdwDataSource`): separate 15-min TTL for the large gzipped DATEX II feed — downloaded once and then filtered per viewport in JS.
+- **Luxembourg global cache** (`LuxembourgDataSource`): same pattern as NDW — 15-min TTL for the KML feed (~1.4 MB), filtered per viewport in JS.
+- **Source resilience**: `Promise.allSettled()` in `DataAggregator` — one source failure never blocks the others. Failed sources return an empty `FeatureCollection`.
+- **Overpass mirrors**: uncomment endpoints in `OsmDataSource.OVERPASS_ENDPOINTS` to enable fallback mirrors.
 
 ## Map Layer Naming Convention
 
-Layers registered in `injected.js`:
+Layers registered by `KomootAdapter._addLayers()` in `injected.js`:
 
-| Layer ID | Source | Shape |
-|----------|--------|-------|
-| `roadworks-hindrances` | GIPOD | fill polygon |
-| `roadworks-hindrances-outline` | GIPOD | line |
-| `roadworks-brussels` | Brussels | circle |
-| `roadworks-ndw` | NDW | line |
-| `roadworks-osm-line` | OSM ways | dashed line |
-| `roadworks-osm-circle` | OSM nodes | circle |
-| _(hover popup)_ | all | MapLibre Popup |
+| Layer ID | Source constant | MapLibre source | Shape |
+|----------|----------------|-----------------|-------|
+| `rw-fill` | `LAYER_FILL` | `rw-flanders` | fill polygon (Flanders areas) |
+| `rw-outline` | `LAYER_OUTLINE` | `rw-flanders` | dashed line outline |
+| `rw-brussels-circle` | `LAYER_BRUSSELS_CIRCLE` | `rw-brussels` | circle (Brussels points) |
+| `rw-ndw-line` | `LAYER_NDW_LINE` | `rw-ndw` | solid line |
+| `rw-luxembourg-line` | `LAYER_LUXEMBOURG_LINE` | `rw-luxembourg` | solid line |
+| `rw-osm-fill` | `LAYER_OSM_FILL` | `rw-osm` | fill polygon (landuse=construction) |
+| `rw-osm-line` | `LAYER_OSM_LINE` | `rw-osm` | dashed line |
+| `rw-osm-circle` | `LAYER_OSM_CIRCLE` | `rw-osm` | circle (barrier=construction nodes) |
 
-Severity colours: full closure `#E53935` / `#C62828` (OSM), partial `#FB8C00` / `#E65100` (OSM).
+`ALL_LAYERS` array in `injected.js` must include every layer so `setVisible()` and `setLimitedVisible()` apply uniformly.
+
+Severity colours: full closure `#E53935` / `#C62828` (OSM tint), partial `#FB8C00` / `#E65100` (OSM tint).
 
 ## Running Tests
 
 ```bash
-# Unit tests (no browser needed)
+# Unit tests — imports OsmDataSource directly via ESM
 node test-normalise-osm.js
 
 # E2E test (requires Chrome + a loaded extension)
 node test-extension.js
 ```
 
-No `package.json` — the project is vanilla JS with no npm dependencies. Playwright is expected to be available globally or via `npx`.
+No `package.json` — vanilla JS with no npm dependencies. Playwright is expected globally or via `npx`.
 
 ## Building
 
 ```bash
 bash build.sh
+bash build.sh clean   # remove dist/ first
 ```
 
 Outputs to `dist/` (gitignored):
@@ -108,6 +144,28 @@ dist/firefox/                       # unpacked, load as temporary add-on
 dist/bikedetour-chrome.zip
 dist/bikedetour-firefox.zip
 ```
+
+## Adding a New Data Source
+
+1. Create `extension/datasources/<Name>DataSource.js` extending `DataSource`.
+2. Declare `id`, `name`, `boundingBox` (or `null` for global), `fetchForBbox()`.
+3. Register in `background.js` → `new DataAggregator([..., new NameDataSource()])`.
+4. Add `host_permissions` in both manifests.
+5. Add a source + layer block in `KomootAdapter._addLayers()`.
+6. Add the new layer to `ALL_LAYERS` in `injected.js`.
+7. Wire source data in `KomootAdapter.applyData()`.
+
+See README.md for the full walkthrough with code examples.
+
+## Adding a New Route Planning Service (Adapter)
+
+1. Read `extension/adapters/RouteplannerAdapter.js` for the four-method interface.
+2. Copy `extension/adapters/KomootAdapter.js` → `extension/adapters/<Service>Adapter.js`; replace map detection and layer logic.
+3. Create `extension/injected-<service>.js` — wire up the adapter (inject it before `injected.js` or create a service-specific injected script).
+4. Create `extension-<service>/manifest.json` pointing at the new injected script; add both adapter and injected scripts to `web_accessible_resources`.
+5. Add the service domain to `host_permissions`.
+
+See README.md for the full walkthrough.
 
 ## Internal Docs for Agents
 
@@ -121,7 +179,11 @@ Read these before making significant changes to understand the intended design.
 ## Common Pitfalls
 
 - **Keep both manifests in sync**: `extension/manifest.json` (Chrome) and `extension-firefox/manifest.json` (Firefox) must always have the same `host_permissions` and `web_accessible_resources` entries. When you add a new data source, add its origin to `host_permissions` in **both** files. When you add a new page-context script (anything injected by `content.js`), add it to `web_accessible_resources` in **both** files.
-- **Do not add `host_permissions` for Overpass endpoints** in the manifest without reading the existing comments — they were intentionally left out to avoid review friction; the extension uses `fetch()` directly from the service worker context where it is already permitted.
-- **Style reloads**: Komoot switches map styles (light/dark). `injected.js` re-adds sources and layers on every `style.load` event; any new layers must be registered there.
-- **MV3 service worker lifecycle**: the service worker can be terminated between requests. Do not assume in-memory state persists across calls to `background.js`; use the tile cache with TTL checks.
-- **Firefox compatibility**: keep `manifest.json` differences limited to `extension-firefox/manifest.json`; the shared `extension/` directory must work for both browsers.
+- **Do not add `host_permissions` for Overpass endpoints** without reading the existing comments — they were intentionally omitted to avoid store review friction; `fetch()` from a service worker context is already permitted regardless.
+- **Style reloads**: Komoot switches map themes. `KomootAdapter._addHoverListeners()` re-triggers `_requestData()` on `style.load`, which re-adds all sources and layers. Any new layer must be in `_addLayers()` and `ALL_LAYERS`.
+- **MV3 service worker lifecycle**: the service worker can be terminated between requests. `DataAggregator._cache` is in-memory and will be empty after wake-up — this is fine because `fetchForBbox` rebuilds the cache on every miss.
+- **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
+- **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
+- **Page-context scripts are not ES modules**: `adapters/KomootAdapter.js` and `injected.js` are injected as plain `<script>` tags and cannot use `import`. `KomootAdapter.js` defines globals (no IIFE); `injected.js` consumes them. Both must be listed in `web_accessible_resources`. `RouteplannerAdapter.js` is documentation only, not a runtime dependency.
+- **Injection order matters**: `content.js` injects `KomootAdapter.js` first and waits for its `load` event before injecting `injected.js`. If you add another adapter script, follow the same sequential pattern.
+- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.
