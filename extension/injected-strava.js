@@ -8,7 +8,9 @@
  *  A) window.mapboxgl property interceptor — Strava assigns window.mapboxgl
  *     explicitly, so we patch the constructor before any Map is created.
  *  B) Immediate check — in case mapboxgl is already set when this script runs.
- *  C) DOM polling fallback — probes .mapboxgl-canvas every 200ms.
+ *  C) prototype.fire patch — recovers maps created before the interceptor fired
+ *     (some Strava URLs create the map before assigning window.mapboxgl).
+ *  D) DOM polling fallback — probes .maplibregl-canvas / .mapboxgl-canvas every 200ms.
  */
 (function () {
   'use strict';
@@ -60,6 +62,21 @@
     PatchedMap.__rwPatched = true;
     Object.keys(OrigCtor).forEach((k) => { PatchedMap[k] = OrigCtor[k]; });
     lib.Map = PatchedMap;
+
+    // Recover maps created before this patch was installed — patch prototype.fire so any
+    // already-existing map instance is caught the moment it dispatches any event.
+    if (!OrigCtor.prototype.__rwFirePatched) {
+      const origFire = OrigCtor.prototype.fire;
+      OrigCtor.prototype.fire = function (event) {
+        if (!adapter._map && !this.__rwDiscovered) {
+          this.__rwDiscovered = true;
+          onMapDiscovered(this);
+        }
+        return origFire.apply(this, arguments);
+      };
+      OrigCtor.prototype.__rwFirePatched = true;
+    }
+
     console.log('[BikeDetour] Patched window.mapboxgl');
   }
 
@@ -90,9 +107,9 @@
 
     if (adapter._map) { clearInterval(poll); return; }
 
-    const canvas = document.querySelector('.mapboxgl-canvas');
+    const canvas = document.querySelector('.mapboxgl-canvas') || document.querySelector('.maplibregl-canvas');
     if (!canvas) return;
-    const container = canvas.closest('.mapboxgl-map');
+    const container = canvas.closest('.mapboxgl-map') || canvas.closest('.maplibregl-map');
     if (!container) return;
 
     // Probe all properties on the container for a map instance
