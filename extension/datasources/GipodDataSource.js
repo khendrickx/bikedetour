@@ -4,8 +4,8 @@ import { DataSource } from './DataSource.js';
 const CYCLIST_L0_UUID = '82e84ba4-b3e9-4171-9834-ec18dca16485';
 
 export class GipodDataSource extends DataSource {
-  get id() { return 'gipod'; }
-  get name() { return 'GIPOD (Flanders)'; }
+  get id() { return 'flanders'; }
+  get name() { return 'Flanders (GIPOD)'; }
 
   get boundingBox() {
     // Flanders, Belgium — with a small buffer
@@ -46,7 +46,7 @@ export class GipodDataSource extends DataSource {
     return {
       ...feature,
       properties: {
-        source:      'gipod',
+        source:      'flanders',
         id:          p.ZoneId || p.fid || '',
         description: p.HindranceDescription || 'Wegwerken',
         start:       p.HindranceStart || null,

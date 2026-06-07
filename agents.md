@@ -49,7 +49,7 @@ Each source is a class in `extension/datasources/` that extends `DataSource`. Th
 
 | Source | Class | Coverage | API style |
 |--------|-------|----------|-----------|
-| GIPOD | `GipodDataSource` | Flanders, BE | OGC Features (GeoJSON) |
+| Flanders (GIPOD) | `GipodDataSource` | Flanders, BE | OGC Features (GeoJSON) |
 | Brussels Mobility | `BrusselsDataSource` | Brussels, BE | WFS (GeoServer JSON) |
 | NDW | `NdwDataSource` | Netherlands | DATEX II XML, gzipped |
 | PCH Luxembourg | `LuxembourgDataSource` | Luxembourg | KML feed |
@@ -61,7 +61,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 
 ```js
 {
-  source:      'gipod' | 'brussels' | 'ndw' | 'luxembourg' | 'osm',  // matches DataSource.id
+  source:      'flanders' | 'brussels' | 'ndw' | 'luxembourg' | 'osm',  // matches DataSource.id
   id:          string,
   description: string,
   start:       string | null,   // ISO date
@@ -82,7 +82,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { gipod, brussels, ndw, luxembourg, osm } }`. |
+| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
 | `extension/injected.js` | `KomootAdapter` class (implements RouteplannerAdapter interface) + Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
@@ -103,8 +103,8 @@ Layers registered by `KomootAdapter._addLayers()` in `injected.js`:
 
 | Layer ID | Source constant | MapLibre source | Shape |
 |----------|----------------|-----------------|-------|
-| `rw-fill` | `LAYER_FILL` | `rw-gipod` | fill polygon (GIPOD areas) |
-| `rw-outline` | `LAYER_OUTLINE` | `rw-gipod` | dashed line outline |
+| `rw-fill` | `LAYER_FILL` | `rw-flanders` | fill polygon (Flanders areas) |
+| `rw-outline` | `LAYER_OUTLINE` | `rw-flanders` | dashed line outline |
 | `rw-brussels-circle` | `LAYER_BRUSSELS_CIRCLE` | `rw-brussels` | circle (Brussels points) |
 | `rw-ndw-line` | `LAYER_NDW_LINE` | `rw-ndw` | solid line |
 | `rw-luxembourg-line` | `LAYER_LUXEMBOURG_LINE` | `rw-luxembourg` | solid line |
@@ -182,4 +182,4 @@ Read these before making significant changes to understand the intended design.
 - **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
 - **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
 - **`injected.js` is not an ES module**: it is injected as a plain `<script>` tag and cannot use `import`. All adapter code must be self-contained in the file. `extension/adapters/RouteplannerAdapter.js` is documentation, not a runtime dependency.
-- **Data key changed**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `gipod` (not `hindrances`) as the GIPOD source key. All three files must agree.
+- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for GIPOD/Flanders data. The `GipodDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.

@@ -71,7 +71,7 @@
     /**
      * Push fetched data onto the map sources.
      * @param {Record<string, import('geojson').FeatureCollection>} dataBySource
-     *   Keys are DataSource ids: 'gipod', 'brussels', 'ndw', 'osm'.
+     *   Keys are DataSource ids: 'flanders', 'brussels', 'ndw', 'luxembourg', 'osm'.
      */
     applyData(dataBySource) {
       const map = this._map;
@@ -83,27 +83,27 @@
       }
 
       const empty = { type: 'FeatureCollection', features: [] };
-      const gipod      = dataBySource.gipod      || empty;
+      const flanders   = dataBySource.flanders   || empty;
       const brussels   = dataBySource.brussels   || empty;
       const ndw        = dataBySource.ndw        || empty;
       const luxembourg = dataBySource.luxembourg || empty;
       const osm        = dataBySource.osm        || empty;
 
-      const hSrc = map.getSource(SOURCE_GIPOD);
+      const fSrc = map.getSource(SOURCE_FLANDERS);
       const bSrc = map.getSource(SOURCE_BRUSSELS);
       const nSrc = map.getSource(SOURCE_NDW);
       const lSrc = map.getSource(SOURCE_LUXEMBOURG);
       const oSrc = map.getSource(SOURCE_OSM);
-      if (hSrc) hSrc.setData(gipod);
+      if (fSrc) fSrc.setData(flanders);
       if (bSrc) bSrc.setData(brussels);
       if (nSrc) nSrc.setData(ndw);
       if (lSrc) lSrc.setData(luxembourg);
       if (oSrc) oSrc.setData(osm);
 
-      const total = gipod.features.length + brussels.features.length +
-                    ndw.features.length   + luxembourg.features.length + osm.features.length;
+      const total = flanders.features.length + brussels.features.length +
+                    ndw.features.length      + luxembourg.features.length + osm.features.length;
       if (total > 0) {
-        console.log(`[RoadWorks] ${gipod.features.length} GIPOD, ${brussels.features.length} Brussels, ${ndw.features.length} NDW, ${luxembourg.features.length} Luxembourg, ${osm.features.length} OSM`);
+        console.log(`[RoadWorks] ${flanders.features.length} Flanders, ${brussels.features.length} Brussels, ${ndw.features.length} NDW, ${luxembourg.features.length} Luxembourg, ${osm.features.length} OSM`);
       }
     }
 
@@ -165,13 +165,13 @@
     }
 
     _addLayers(map) {
-      // ── GIPOD (Flanders) ─────────────────────────────────────────────────
-      if (!map.getSource(SOURCE_GIPOD)) {
-        map.addSource(SOURCE_GIPOD, { type: 'geojson', data: EMPTY_FC });
+      // ── Flanders (GIPOD) ─────────────────────────────────────────────────
+      if (!map.getSource(SOURCE_FLANDERS)) {
+        map.addSource(SOURCE_FLANDERS, { type: 'geojson', data: EMPTY_FC });
       }
       if (!map.getLayer(LAYER_FILL)) {
         map.addLayer({
-          id: LAYER_FILL, type: 'fill', source: SOURCE_GIPOD,
+          id: LAYER_FILL, type: 'fill', source: SOURCE_FLANDERS,
           paint: {
             'fill-color':   ['match', ['get', 'severity'], 'full_closure', '#E53935', '#FB8C00'],
             'fill-opacity': 0.35,
@@ -180,7 +180,7 @@
       }
       if (!map.getLayer(LAYER_OUTLINE)) {
         map.addLayer({
-          id: LAYER_OUTLINE, type: 'line', source: SOURCE_GIPOD,
+          id: LAYER_OUTLINE, type: 'line', source: SOURCE_FLANDERS,
           paint: {
             'line-color':     ['match', ['get', 'severity'], 'full_closure', '#B71C1C', '#E65100'],
             'line-width':     2,
@@ -238,7 +238,7 @@
         });
       }
 
-      // ── OpenStreetMap (Overpass) — crimson-shifted to distinguish from GIPOD
+      // ── OpenStreetMap (Overpass) — crimson-shifted to distinguish from Flanders
       if (!map.getSource(SOURCE_OSM)) {
         map.addSource(SOURCE_OSM, { type: 'geojson', data: EMPTY_FC });
       }
@@ -379,7 +379,7 @@
 
   // ── Layer / source constants ────────────────────────────────────────────────
 
-  const SOURCE_GIPOD      = 'rw-gipod';
+  const SOURCE_FLANDERS   = 'rw-flanders';
   const SOURCE_BRUSSELS   = 'rw-brussels';
   const SOURCE_NDW        = 'rw-ndw';
   const SOURCE_LUXEMBOURG = 'rw-luxembourg';

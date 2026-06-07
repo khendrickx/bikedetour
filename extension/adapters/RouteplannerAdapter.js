@@ -45,7 +45,7 @@ export class RouteplannerAdapter {
    *
    * @param {Record<string, import('geojson').FeatureCollection>} dataBySource
    *   One FeatureCollection per registered DataSource, keyed by DataSource.id.
-   *   Example keys: 'gipod', 'brussels', 'ndw', 'osm'.
+   *   Example keys: 'flanders', 'brussels', 'ndw', 'luxembourg', 'osm'.
    *   Sources outside the current viewport deliver an empty FeatureCollection.
    */
   applyData(dataBySource) { // eslint-disable-line no-unused-vars

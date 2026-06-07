@@ -33,7 +33,7 @@ export class DataAggregator {
 
   /**
    * Returns merged data keyed by DataSource.id, e.g.:
-   *   { gipod: FeatureCollection, brussels: FeatureCollection, ... }
+   *   { flanders: FeatureCollection, brussels: FeatureCollection, ... }
    *
    * @param {{ west: number, south: number, east: number, north: number }} bbox
    * @returns {Promise<{ data: Record<string, import('geojson').FeatureCollection>, fromCache: boolean }>}
