@@ -413,8 +413,6 @@ class StravaAdapter {
       map.off('move', update);
     }
 
-    box.addEventListener('mouseenter', () => this._cancelHide());
-    box.addEventListener('mouseleave', () => this._scheduleHide(450));
     closeBtn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       clearTimeout(this._popupTimer);
