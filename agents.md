@@ -1,5 +1,7 @@
 # Komoot Road Works — Agent Guide
 
+> **Agents:** keep this file current. After any change that affects architecture, data sources, file roles, layer names, caching behaviour, build/test steps, or common pitfalls, update the relevant section(s) in the same commit as the code change.
+
 A Chrome/Firefox extension (Manifest V3) that overlays cycling construction works and road closures on the [Komoot](https://www.komoot.com) route planner map.
 
 ## Architecture
