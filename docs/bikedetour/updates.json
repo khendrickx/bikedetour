@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "bikedetour@cycling-construction-planning": {
+      "updates": [
+        {
+          "version": "0.1.0",
+          "update_link": "https://kilianhendrickx.be/bikedetour/firefox.xpi"
+        }
+      ]
+    }
+  }
+}
