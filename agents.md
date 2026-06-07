@@ -2,7 +2,7 @@
 
 > **Agents:** keep this file current. After any change that affects architecture, data sources, file roles, layer names, caching behaviour, build/test steps, or common pitfalls, update the relevant section(s) in the same commit as the code change.
 
-A Chrome/Firefox extension (Manifest V3) that overlays cycling construction works and road closures on the [Komoot](https://www.komoot.com) route planner map.
+A Chrome/Firefox extension (Manifest V3) that overlays cycling construction works and road closures on [Komoot](https://www.komoot.com), [RideWithGPS](https://ridewithgps.com), and [Strava Routes](https://www.strava.com/maps/create).
 
 ## Architecture
 
@@ -85,7 +85,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
 | `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected-komoot.js`. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
+| `extension/content.js` | Komoot bridge. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
 | `extension/injected-komoot.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/content-ridewithgps.js` | Same bridge role as `content.js` but injects `RideWithGPSAdapter.js` then `injected-ridewithgps.js`. |
 | `extension/adapters/RideWithGPSAdapter.js` | `RideWithGPSAdapter` class. Detects map library at runtime (`_mapType`): MapLibre GL path uses sources/layers (same as KomootAdapter); Leaflet path uses `L.layerGroup` + `L.geoJSON`. Shared helpers: `toContent`, `escHtml`, `buildPopupHtml`, source/layer constants. |

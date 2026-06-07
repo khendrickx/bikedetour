@@ -1,6 +1,6 @@
 # Cycling Road Works Overlay
 
-A browser extension that overlays active construction zones and road closures on the [Komoot](https://www.komoot.com) route planner map. Plan your cycling route and instantly see which paths are blocked, restricted, or under construction — before you ride.
+A browser extension that overlays active construction zones and road closures on cycling route planners — [Komoot](https://www.komoot.com), [RideWithGPS](https://ridewithgps.com), and [Strava Routes](https://www.strava.com/maps/create). Plan your cycling route and instantly see which paths are blocked, restricted, or under construction — before you ride.
 
 ---
 
@@ -8,15 +8,16 @@ A browser extension that overlays active construction zones and road closures on
 
 ### What problem does it solve?
 
-Komoot is excellent at finding scenic cycling routes, but it has no awareness of temporary road works. You can plan a perfect route only to arrive at a barrier or detour notice on the day of your ride. This extension closes that gap by pulling live data from official road-work registries and painting it directly onto the Komoot map.
+Route planners like Komoot, RideWithGPS, and Strava are excellent at finding cycling routes, but they have no awareness of temporary road works. You can plan a perfect route only to arrive at a barrier or detour notice on the day of your ride. This extension closes that gap by pulling live data from official road-work registries and painting it directly onto the map — whichever planner you use.
 
 ### Data sources
 
 | Source | Region | Data type |
 |--------|--------|-----------|
-| **GIPOD** | Flanders, Belgium | Official hindrance registry — polygon areas with cyclist-specific consequences |
+| **GIPOD (Flanders)** | Flanders, Belgium | Official hindrance registry — polygon areas with cyclist-specific consequences |
 | **Brussels Mobility** | Brussels, Belgium | Active traffic events — points with importance rating |
 | **NDW** | Netherlands | DATEX II road closures — line geometries |
+| **PCH Luxembourg** | Luxembourg | KML road-works feed — line geometries |
 | **OpenStreetMap** | Global | `highway=construction`, `barrier=construction`, `landuse=construction` |
 
 ### Severity colour coding
@@ -29,7 +30,7 @@ Komoot is excellent at finding scenic cycling routes, but it has no awareness of
 
 ### Features
 
-- **Zero configuration** — install and visit [komoot.com/plan](https://www.komoot.com/plan).
+- **Zero configuration** — install and visit [komoot.com/plan](https://www.komoot.com/plan), [ridewithgps.com/routes/new](https://ridewithgps.com/routes/new), or [strava.com/maps/create](https://www.strava.com/maps/create).
 - **Live data** — fetched fresh from official APIs on every map pan or zoom; cached for 10 minutes per viewport tile.
 - **Hover popups** — click any overlay to see description, dates, owning organisation.
 - **Toggle switch** — enable/disable the overlay from the extension popup without reloading the page.
@@ -68,9 +69,10 @@ The extension is split into three layers:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Data Input Layer                                            │
-│  DataSource (abstract)  ←  GipodDataSource                 │
+│  DataSource (abstract)  ←  FlandersDataSource              │
 │                         ←  BrusselsDataSource              │
 │                         ←  NdwDataSource                   │
+│                         ←  LuxembourgDataSource            │
 │                         ←  OsmDataSource                   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Feature[]
@@ -82,6 +84,8 @@ The extension is split into three layers:
 ┌──────────────────────────────▼──────────────────────────────┐
 │ Map Layer                                                   │
 │  RouteplannerAdapter (interface)  ←  KomootAdapter          │
+│                                   ←  RideWithGPSAdapter     │
+│                                   ←  StravaAdapter          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -119,10 +123,14 @@ The extension is split into three layers:
 ### Extension plumbing
 
 ```
-popup.html/popup.js  →  chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
-content.js           →  injects injected-komoot.js; bridges RW_FETCH ↔ FETCH_ROADWORKS
-background.js        →  service worker; DataAggregator.fetchForBbox()
-injected-komoot.js   →  KomootAdapter; patches/detects MapLibre; renders overlay
+popup.html/popup.js       →  chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
+content.js                →  injects KomootAdapter.js + injected-komoot.js; bridges RW_FETCH ↔ FETCH_ROADWORKS
+content-ridewithgps.js    →  same bridge role; injects RideWithGPSAdapter.js + injected-ridewithgps.js
+content-strava.js         →  same bridge role; injects StravaAdapter.js + injected-strava.js
+background.js             →  service worker; DataAggregator.fetchForBbox()
+injected-komoot.js        →  KomootAdapter; detects MapLibre via window interceptors + React fiber walk
+injected-ridewithgps.js   →  RideWithGPSAdapter; detects MapLibre or Leaflet via interceptors + DOM polling
+injected-strava.js        →  StravaAdapter; detects Mapbox GL via window.mapboxgl interceptor
 ```
 
 ### Normalised feature schema
@@ -253,7 +261,7 @@ Add an entry to the data sources list in the popup so users know the source is a
 
 ### Adding a new route planning service
 
-A route planning service adapter connects the shared data pipeline to a different map-based website (e.g. Strava Routes, Bikemap, Outdooractive).
+A route planning service adapter connects the shared data pipeline to a different map-based website (e.g. Bikemap, Outdooractive). Komoot, RideWithGPS, and Strava are already supported — see their adapter files as working examples.
 
 **1. Read the interface spec**
 
