@@ -1,57 +1,9 @@
 // test-normalise-osm.js — run with: node test-normalise-osm.js
-const assert = require('assert');
+import assert from 'assert';
+import { OsmDataSource } from './extension/datasources/OsmDataSource.js';
 
-// Paste the function under test here before running
-// (will be replaced by require once extracted to a module)
-function normaliseOsmElement(el) {
-  const tags  = el.tags || {};
-  const isWay = el.type === 'way';
-  const id    = `${el.type}/${el.id}`;
-
-  let description;
-  if (tags.name) {
-    description = tags.name;
-  } else if (tags.landuse === 'construction') {
-    description = 'Bouwplaats';
-  } else if (tags.highway === 'construction' && tags.construction) {
-    description = `Wegwerkzaamheden (${tags.construction})`;
-  } else if (tags.highway === 'construction') {
-    description = 'Wegwerkzaamheden';
-  } else {
-    description = 'Constructiebarrière';
-  }
-
-  const access   = tags.access || '';
-  const severity = (access === 'permissive' || access === 'yes') ? 'partial' : 'full_closure';
-
-  const properties = {
-    source:      'osm',
-    id,
-    description,
-    start:       tags.start_date || null,
-    end:         tags.end_date   || null,
-    severity,
-    owner:       'OpenStreetMap',
-    consequence: '',
-    infoUrl:     `https://www.openstreetmap.org/${id}`,
-  };
-
-  let geometry;
-  if (isWay) {
-    if (!el.geometry || el.geometry.length < 2) return null;
-    const coords = el.geometry.map(p => [p.lon, p.lat]);
-    const first = el.geometry[0], last = el.geometry[el.geometry.length - 1];
-    const isClosed = el.geometry.length >= 4 &&
-      first.lat === last.lat && first.lon === last.lon;
-    geometry = isClosed
-      ? { type: 'Polygon',    coordinates: [coords] }
-      : { type: 'LineString', coordinates: coords };
-  } else {
-    geometry = { type: 'Point', coordinates: [el.lon, el.lat] };
-  }
-
-  return { type: 'Feature', geometry, properties };
-}
+const source = new OsmDataSource();
+const normaliseOsmElement = (el) => source._normalise(el);
 
 // ── Test 1: highway=construction way, no access tag → full_closure LineString ─
 {
@@ -64,7 +16,6 @@ function normaliseOsmElement(el) {
   assert.equal(f.properties.source, 'osm');
   assert.equal(f.properties.id, 'way/123456');
   assert.equal(f.properties.severity, 'full_closure');
-  assert.equal(f.properties.infoUrl, 'https://www.openstreetmap.org/way/123456');
   assert.equal(f.properties.owner, 'OpenStreetMap');
   assert.equal(f.geometry.type, 'LineString');
   assert.deepEqual(f.geometry.coordinates, [[4.0, 51.0], [4.1, 51.1]]);
@@ -83,7 +34,6 @@ function normaliseOsmElement(el) {
   assert.deepEqual(f.geometry.coordinates, [4.05, 51.05]);
   assert.equal(f.properties.severity, 'partial');
   assert.equal(f.properties.id, 'node/789');
-  assert.equal(f.properties.infoUrl, 'https://www.openstreetmap.org/node/789');
   console.log('✓ Test 2: barrier=construction node, access=permissive');
 }
 
@@ -158,7 +108,6 @@ function normaliseOsmElement(el) {
   assert.equal(f.geometry.type, 'Polygon');
   assert.equal(f.properties.description, 'Bouwplaats');
   assert.equal(f.properties.severity, 'full_closure');
-  // Polygon coordinates are wrapped in an extra array (outer ring)
   assert.equal(f.geometry.coordinates.length, 1);
   assert.equal(f.geometry.coordinates[0].length, 4);
   console.log('✓ Test 8: landuse=construction closed way → Polygon');

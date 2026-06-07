@@ -52,12 +52,9 @@
           }
           if (response && response.success) {
             window.postMessage({
-              __rw:       FROM_CONTENT,
-              type:       'RW_DATA',
-              hindrances: response.data.hindrances,
-              brussels:   response.data.brussels,
-              ndw:        response.data.ndw,
-              osm:        response.data.osm,
+              __rw: FROM_CONTENT,
+              type: 'RW_DATA',
+              data: response.data,
             }, '*');
           }
         }
