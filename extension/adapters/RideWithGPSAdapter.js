@@ -53,32 +53,43 @@ const SOURCE_KEYS = ['flanders', 'brussels', 'ndw', 'luxembourg', 'osm'];
 
 // ── Popup helpers (shared by both map library paths) ─────────────────────────
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function buildPopupHtml(p) {
+function buildPopupEl(p) {
   const fmt = (iso) => iso
     ? new Date(iso).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : '—';
-  const severityBadge = p.severity === 'full_closure'
-    ? '<span style="color:#E53935;font-weight:bold">⛔ Geen doorgang voor fietsers</span>'
-    : '<span style="color:#FB8C00;font-weight:bold">⚠️ Beperkte doorgang voor fietsers</span>';
-  const locationLine = p.location
-    ? `<div style="margin-top:4px;color:#555">📍 ${escHtml(p.location)}</div>` : '';
-  return `<div>
-    <div style="font-weight:600;margin-bottom:4px;padding-right:18px">${escHtml(p.description || 'Wegwerken')}</div>
-    ${severityBadge}
-    ${locationLine}
-    <div style="margin-top:6px;color:#555">
-      📅 ${fmt(p.start)} → ${fmt(p.end)}<br>
-      🏢 ${escHtml(p.owner || '—')}
-    </div>
-  </div>`;
+
+  const el = document.createElement('div');
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;margin-bottom:4px;padding-right:18px';
+  title.textContent = p.description || 'Wegwerken';
+  el.appendChild(title);
+
+  const badge = document.createElement('span');
+  if (p.severity === 'full_closure') {
+    badge.style.cssText = 'color:#E53935;font-weight:bold';
+    badge.textContent = '⛔ Geen doorgang voor fietsers';
+  } else {
+    badge.style.cssText = 'color:#FB8C00;font-weight:bold';
+    badge.textContent = '⚠️ Beperkte doorgang voor fietsers';
+  }
+  el.appendChild(badge);
+
+  if (p.location) {
+    const loc = document.createElement('div');
+    loc.style.cssText = 'margin-top:4px;color:#555';
+    loc.textContent = '📍 ' + p.location;
+    el.appendChild(loc);
+  }
+
+  const meta = document.createElement('div');
+  meta.style.cssText = 'margin-top:6px;color:#555';
+  meta.appendChild(document.createTextNode(`📅 ${fmt(p.start)} → ${fmt(p.end)}`));
+  meta.appendChild(document.createElement('br'));
+  meta.appendChild(document.createTextNode(`🏢 ${p.owner || '—'}`));
+  el.appendChild(meta);
+
+  return el;
 }
 
 // ── RideWithGPSAdapter ────────────────────────────────────────────────────────
@@ -306,7 +317,7 @@ class RideWithGPSAdapter {
       if (!e.features || !e.features.length) return;
       this._cancelHide();
       if (this._popupDismiss) this._popupDismiss();
-      this._popupDismiss = this._showPopup(map, e.lngLat, buildPopupHtml(e.features[0].properties));
+      this._popupDismiss = this._showPopup(map, e.lngLat, buildPopupEl(e.features[0].properties));
     };
 
     const hoverLayers = [
@@ -321,7 +332,7 @@ class RideWithGPSAdapter {
     map.on('style.load', () => this._requestData());
   }
 
-  _showPopup(map, lngLat, html) {
+  _showPopup(map, lngLat, popupEl) {
     const canvasContainer = map.getCanvasContainer
       ? map.getCanvasContainer()
       : map.getCanvas().parentElement;
@@ -348,7 +359,7 @@ class RideWithGPSAdapter {
       'font-size:13px',
       'line-height:1.5',
     ].join(';');
-    box.innerHTML = html;
+    box.appendChild(popupEl);
 
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '×';
@@ -452,8 +463,7 @@ class RideWithGPSAdapter {
           });
         },
         onEachFeature(feature, layer) {
-          const html = buildPopupHtml(feature.properties);
-          layer.bindPopup(html, { maxWidth: 280 });
+          layer.bindPopup(buildPopupEl(feature.properties), { maxWidth: 280 });
           layer.on('mouseover', function () { this.openPopup(); });
         },
       }).addTo(group);
