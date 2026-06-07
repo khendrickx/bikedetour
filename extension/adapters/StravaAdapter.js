@@ -312,12 +312,12 @@ class StravaAdapter {
   }
 
   _addHoverListeners(map) {
-    const mapCanvas       = map.getCanvas();
-    const canvasContainer = map.getCanvasContainer();
+    const mapCanvas = map.getCanvas();
 
-    // Strava renders its own canvas on top of MapLibre's for route-drawing, blocking
-    // MapLibre's layer events. Listen on the container instead and query features manually.
-    const overlayCanvas = [...canvasContainer.querySelectorAll('canvas')]
+    // Strava renders its own canvas on top of MapLibre's for route-drawing.
+    // Find it from the full document — it may sit outside getCanvasContainer() on some URLs.
+    // Listen directly on it so Strava's stopPropagation calls don't block us.
+    const overlayCanvas = [...document.querySelectorAll('canvas')]
       .find(c => c !== mapCanvas) || mapCanvas;
 
     const hoverLayerIds = [
@@ -325,7 +325,7 @@ class StravaAdapter {
       LAYER_LUXEMBOURG_LINE, LAYER_OSM_FILL, LAYER_OSM_LINE, LAYER_OSM_CIRCLE,
     ];
 
-    canvasContainer.addEventListener('mousemove', (e) => {
+    overlayCanvas.addEventListener('mousemove', (e) => {
       const rect  = mapCanvas.getBoundingClientRect();
       const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       const validLayers = hoverLayerIds.filter(id => map.getLayer(id));
@@ -349,7 +349,7 @@ class StravaAdapter {
       }
     });
 
-    canvasContainer.addEventListener('mouseleave', () => {
+    overlayCanvas.addEventListener('mouseleave', () => {
       overlayCanvas.style.cursor = '';
       this._hoverKey = null;
       this._scheduleHide(450);
