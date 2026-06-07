@@ -2,7 +2,7 @@
 
 > **Agents:** keep this file current. After any change that affects architecture, data sources, file roles, layer names, caching behaviour, build/test steps, or common pitfalls, update the relevant section(s) in the same commit as the code change.
 
-A Chrome/Firefox extension (Manifest V3) that overlays cycling construction works and road closures on the [Komoot](https://www.komoot.com) route planner map.
+A Chrome/Firefox extension (Manifest V3) that overlays cycling construction works and road closures on [Komoot](https://www.komoot.com), [RideWithGPS](https://ridewithgps.com), and [Strava Routes](https://www.strava.com/maps/create).
 
 ## Architecture
 
@@ -24,9 +24,10 @@ Three-layer design with MV3 sandbox isolation:
 └──────────────────────────────┬──────────────────────────────┘
                                │ { sourceId: FeatureCollection }
 ┌──────────────────────────────▼──────────────────────────────┐
-│ Map Layer  (extension/adapters/ + injected-komoot.js / injected-ridewithgps.js) │
+│ Map Layer  (extension/adapters/ + injected scripts)                             │
 │  RouteplannerAdapter (interface)  ←  KomootAdapter                              │
 │                                   ←  RideWithGPSAdapter                         │
+│                                   ←  StravaAdapter                              │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,11 +85,14 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
 | `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected-komoot.js`. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
+| `extension/content.js` | Komoot bridge. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
 | `extension/injected-komoot.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/content-ridewithgps.js` | Same bridge role as `content.js` but injects `RideWithGPSAdapter.js` then `injected-ridewithgps.js`. |
 | `extension/adapters/RideWithGPSAdapter.js` | `RideWithGPSAdapter` class. Detects map library at runtime (`_mapType`): MapLibre GL path uses sources/layers (same as KomootAdapter); Leaflet path uses `L.layerGroup` + `L.geoJSON`. Shared helpers: `toContent`, `escHtml`, `buildPopupHtml`, source/layer constants. |
 | `extension/injected-ridewithgps.js` | Thin orchestrator for RideWithGPS: instantiates `RideWithGPSAdapter`, wires messages, runs Leaflet + MapLibre detection (window interceptors + DOM polling). No React fiber walk. |
+| `extension/content-strava.js` | Content script for Strava. Injects `StravaAdapter.js` then `injected-strava.js`. Bridge logic identical to `content.js`. |
+| `extension/adapters/StravaAdapter.js` | `StravaAdapter` class + shared globals. Plain script (no IIFE). Implements RouteplannerAdapter via Mapbox GL JS API. |
+| `extension/injected-strava.js` | Thin orchestrator for Strava: `window.mapboxgl` interceptor + immediate check + DOM polling. No React fiber walk needed — Strava assigns `window.mapboxgl` explicitly. |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -193,3 +197,7 @@ Read these before making significant changes to understand the intended design.
 - **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected-komoot.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected-komoot.js` must stay in sync.
 - **RideWithGPS dual-library detection**: `RideWithGPSAdapter._mapType` is set once in `onMapReady` by checking `typeof map.getSource === 'function'`. All four interface methods branch on this flag. If you add a feature that behaves differently per library, add it to **both** branches and update the `_mapType` check if the heuristic ever proves unreliable.
 - **Leaflet `_lastData`**: `setLimitedVisible` on the Leaflet path re-calls `_applyDataLeaflet(this._lastData)`. If `_lastData` is `null` (no data fetched yet), the call is skipped. This is intentional — the filter will be applied on the next `applyData` call.
+- **Strava URL redirect**: `https://www.strava.com/routes/new` server-redirects to `https://www.strava.com/maps/create`. The content script match must include `https://www.strava.com/maps/*` — matching only `/routes/*` means the script never runs.
+- **Strava actually uses MapLibre GL aliased as `window.mapboxgl`**: The canvas DOM class is `maplibregl-canvas`, not `mapboxgl-canvas`. Strava assigns the MapLibre library to `window.mapboxgl`, so the interceptor works, but any DOM selector using `.mapboxgl-canvas` will find nothing. Use `map.getCanvas()` / `map.getCanvasContainer()` via the map API instead. DOM polling must query both classes.
+- **On some Strava URLs the map is created before `window.mapboxgl` is assigned**: The constructor patch (`PatchedMap`) only catches maps created after the patch. For maps created before it, `StravaAdapter` patches `Map.prototype.fire` so any already-existing instance is caught the moment it dispatches its first event.
+- **Strava route-drawing canvas blocks MapLibre layer events**: Strava renders a second canvas on top of MapLibre's for route drawing. This overlay canvas captures all mouse events before MapLibre sees them, so `map.on('mouseenter', layerId, …)` never fires. `StravaAdapter._addHoverListeners` uses `mousemove` on `map.getCanvasContainer()` + `map.queryRenderedFeatures()` instead — the same technique MapLibre uses internally, applied at the container level.

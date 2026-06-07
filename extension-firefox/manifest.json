@@ -21,7 +21,8 @@
     "https://geo.api.vlaanderen.be/*",
     "https://data.mobility.brussels/*",
     "https://opendata.ndw.nu/*",
-    "https://www.cita.lu/*"
+    "https://www.cita.lu/*",
+    "https://www.strava.com/*"
   ],
 
   "background": {
@@ -42,6 +43,14 @@
       ],
       "js": ["content-ridewithgps.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.strava.com/maps/*",
+        "https://www.strava.com/routes/*"
+      ],
+      "js": ["content-strava.js"],
+      "run_at": "document_start"
     }
   ],
 
@@ -53,6 +62,10 @@
     {
       "resources": ["adapters/RideWithGPSAdapter.js", "injected-ridewithgps.js"],
       "matches": ["https://ridewithgps.com/*"]
+    },
+    {
+      "resources": ["adapters/StravaAdapter.js", "injected-strava.js"],
+      "matches": ["https://www.strava.com/*"]
     }
   ],
 
