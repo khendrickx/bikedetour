@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Komoot Road Works",
+  "name": "BikeDetour",
   "version": "0.1.0",
-  "description": "Overlay cycling construction works and road closures on the Komoot route planner map.",
+  "description": "Overlay cycling construction works and road closures on route planner maps so you can detour around them.",
 
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.komoot.com/*",
     "https://geo.api.vlaanderen.be/*",
     "https://data.mobility.brussels/*",
-    "https://opendata.ndw.nu/*"
+    "https://opendata.ndw.nu/*",
+    "https://www.cita.lu/*"
     // "https://overpass-api.de/*",
     // "https://overpass.kumi.systems/*",
     // "https://overpass.private.coffee/*",
@@ -31,13 +32,13 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["adapters/KomootAdapter.js", "injected.js"],
       "matches": ["https://www.komoot.com/*"]
     }
   ],
 
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Komoot Road Works"
+    "default_title": "BikeDetour"
   }
 }

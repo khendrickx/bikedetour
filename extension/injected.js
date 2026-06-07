@@ -271,7 +271,7 @@
     const nCount = (ndw        && ndw.features)        ? ndw.features.length        : 0;
     const oCount = (osm        && osm.features)        ? osm.features.length        : 0;
     if (hCount + bCount + nCount + oCount > 0) {
-      console.log(`[RoadWorks] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${oCount} OSM`);
+      console.log(`[BikeDetour] ${hCount} GIPOD, ${bCount} Brussels, ${nCount} NDW, ${oCount} OSM`);
     }
   }
 
@@ -331,7 +331,7 @@
 
     if (activeMap === map) return;
     activeMap = map;
-    console.log('[RoadWorks] Map detected ✓');
+    console.log('[BikeDetour] Map detected ✓');
 
     // Hover listeners and style-reload handler — registered once per map instance
     addHoverListeners(map);
@@ -446,7 +446,7 @@
     Object.keys(OrigCtor).forEach((k) => { PatchedMap[k] = OrigCtor[k]; });
 
     lib.Map = PatchedMap;
-    console.log('[RoadWorks] Patched window lib (mapboxgl/maplibregl)');
+    console.log('[BikeDetour] Patched window lib (mapboxgl/maplibregl)');
   }
 
   function installInterceptors() {

@@ -333,7 +333,7 @@ out geom;`;
         method:  'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Komoot RoadWorks Extension (https://www.komoot.com/plan)',
+          'User-Agent': 'BikeDetour Extension (https://www.komoot.com/plan)',
         },
         body,
         signal:  controller.signal,
@@ -347,7 +347,7 @@ out geom;`;
       return { type: 'FeatureCollection', features };
     } catch (err) {
       clearTimeout(timer);
-      console.warn(`[RoadWorks] Overpass ${url} failed:`, err.message);
+      console.warn(`[BikeDetour] Overpass ${url} failed:`, err.message);
     }
   }
 
@@ -416,7 +416,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       sendResponse({ success: true, data });
     } catch (err) {
-      console.error('[RoadWorks BG]', err);
+      console.error('[BikeDetour]', err);
       sendResponse({ success: false, error: String(err) });
     }
   })();

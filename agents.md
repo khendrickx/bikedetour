@@ -1,4 +1,4 @@
-# Komoot Road Works — Agent Guide
+# BikeDetour — Agent Guide
 
 > **Agents:** keep this file current. After any change that affects architecture, data sources, file roles, layer names, caching behaviour, build/test steps, or common pitfalls, update the relevant section(s) in the same commit as the code change.
 
@@ -105,8 +105,8 @@ Outputs to `dist/` (gitignored):
 ```
 dist/chrome/                        # unpacked, load via chrome://extensions
 dist/firefox/                       # unpacked, load as temporary add-on
-dist/komoot-roadworks-chrome.zip
-dist/komoot-roadworks-firefox.zip
+dist/bikedetour-chrome.zip
+dist/bikedetour-firefox.zip
 ```
 
 ## Internal Docs for Agents
@@ -120,6 +120,7 @@ Read these before making significant changes to understand the intended design.
 
 ## Common Pitfalls
 
+- **Keep both manifests in sync**: `extension/manifest.json` (Chrome) and `extension-firefox/manifest.json` (Firefox) must always have the same `host_permissions` and `web_accessible_resources` entries. When you add a new data source, add its origin to `host_permissions` in **both** files. When you add a new page-context script (anything injected by `content.js`), add it to `web_accessible_resources` in **both** files.
 - **Do not add `host_permissions` for Overpass endpoints** in the manifest without reading the existing comments — they were intentionally left out to avoid review friction; the extension uses `fetch()` directly from the service worker context where it is already permitted.
 - **Style reloads**: Komoot switches map styles (light/dark). `injected.js` re-adds sources and layers on every `style.load` event; any new layers must be registered there.
 - **MV3 service worker lifecycle**: the service worker can be terminated between requests. Do not assume in-memory state persists across calls to `background.js`; use the tile cache with TTL checks.

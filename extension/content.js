@@ -47,7 +47,7 @@
         { type: 'FETCH_ROADWORKS', bbox: e.data.bbox },
         (response) => {
           if (chrome.runtime.lastError) {
-            console.warn('[RoadWorks Content]', chrome.runtime.lastError.message);
+            console.warn('[BikeDetour]', chrome.runtime.lastError.message);
             return;
           }
           if (response && response.success) {

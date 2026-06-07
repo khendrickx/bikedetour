@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Komoot Road Works</title>
+  <title>BikeDetour</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -117,7 +117,7 @@
 <body>
   <header>
     <span class="icon">🚧</span>
-    <h1>Komoot Road Works</h1>
+    <h1>BikeDetour</h1>
   </header>
 
   <div class="row">
@@ -158,12 +158,6 @@
     <span>OpenStreetMap — Global</span>
     <span class="badge live">Live</span>
   </div>
-  <div class="source disabled">
-    <span class="dot pending"></span>
-    <span>SPW — Wallonia</span>
-    <span class="badge soon">Soon</span>
-  </div>
-
   <div class="legend">
     <div class="legend-item"><span class="swatch full"></span> Closed to cyclists</div>
     <div class="legend-item"><span class="swatch partial"></span> Limited access</div>
@@ -171,6 +165,13 @@
   </div>
 
   <div id="status">No data loaded yet</div>
+
+  <div style="margin-top:10px;font-size:11px;color:#bbb;text-align:center">
+    <a href="https://github.com/khendrickx/bikedetour" target="_blank"
+       style="color:#bbb;text-decoration:none" onmouseover="this.style.color='#888'" onmouseout="this.style.color='#bbb'">
+      github.com/khendrickx/bikedetour
+    </a>
+  </div>
 
   <script src="popup.js"></script>
 </body>
