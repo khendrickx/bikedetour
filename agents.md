@@ -11,7 +11,7 @@ Three-layer design with MV3 sandbox isolation:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Data Input Layer  (extension/datasources/)                  │
-│  DataSource (abstract)  ←  GipodDataSource                 │
+│  DataSource (abstract)  ←  FlandersDataSource               │
 │                         ←  BrusselsDataSource              │
 │                         ←  NdwDataSource                   │
 │                         ←  LuxembourgDataSource            │
@@ -49,7 +49,7 @@ Each source is a class in `extension/datasources/` that extends `DataSource`. Th
 
 | Source | Class | Coverage | API style |
 |--------|-------|----------|-----------|
-| Flanders (GIPOD) | `GipodDataSource` | Flanders, BE | OGC Features (GeoJSON) |
+| Flanders (GIPOD) | `FlandersDataSource` | Flanders, BE | OGC Features (GeoJSON) |
 | Brussels Mobility | `BrusselsDataSource` | Brussels, BE | WFS (GeoServer JSON) |
 | NDW | `NdwDataSource` | Netherlands | DATEX II XML, gzipped |
 | PCH Luxembourg | `LuxembourgDataSource` | Luxembourg | KML feed |
@@ -78,7 +78,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 | File | Role |
 |------|------|
 | `extension/datasources/DataSource.js` | Abstract base class. Declares `id`, `name`, `boundingBox`, `fetchForBbox()`, and a free `overlaps(bbox)` helper. |
-| `extension/datasources/Gipod\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
+| `extension/datasources/Flanders\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
 | `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
@@ -182,4 +182,4 @@ Read these before making significant changes to understand the intended design.
 - **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
 - **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
 - **`injected.js` is not an ES module**: it is injected as a plain `<script>` tag and cannot use `import`. All adapter code must be self-contained in the file. `extension/adapters/RouteplannerAdapter.js` is documentation, not a runtime dependency.
-- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for GIPOD/Flanders data. The `GipodDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.
+- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.

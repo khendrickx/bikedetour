@@ -3,7 +3,7 @@ import { DataSource } from './DataSource.js';
 // Cyclist-relevant Level-0 consequence UUID from the GIPOD taxonomy
 const CYCLIST_L0_UUID = '82e84ba4-b3e9-4171-9834-ec18dca16485';
 
-export class GipodDataSource extends DataSource {
+export class FlandersDataSource extends DataSource {
   get id() { return 'flanders'; }
   get name() { return 'Flanders (GIPOD)'; }
 
