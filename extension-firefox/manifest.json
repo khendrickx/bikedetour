@@ -18,6 +18,7 @@
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.komoot.com/*",
+    "https://connect.garmin.com/*",
     "https://geo.api.vlaanderen.be/*",
     "https://data.mobility.brussels/*",
     "https://opendata.ndw.nu/*",
@@ -42,6 +43,15 @@
       ],
       "js": ["content-ridewithgps.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://connect.garmin.com/app/courses",
+        "https://connect.garmin.com/app/courses/*",
+        "https://connect.garmin.com/app/course/*"
+      ],
+      "js": ["content-garmin.js"],
+      "run_at": "document_start"
     }
   ],
 
@@ -53,6 +63,10 @@
     {
       "resources": ["adapters/RideWithGPSAdapter.js", "injected-ridewithgps.js"],
       "matches": ["https://ridewithgps.com/*"]
+    },
+    {
+      "resources": ["adapters/GarminAdapter.js", "injected-garmin.js"],
+      "matches": ["https://connect.garmin.com/*"]
     }
   ],
 
