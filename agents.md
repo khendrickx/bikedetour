@@ -24,10 +24,11 @@ Three-layer design with MV3 sandbox isolation:
 └──────────────────────────────┬──────────────────────────────┘
                                │ { sourceId: FeatureCollection }
 ┌──────────────────────────────▼──────────────────────────────┐
-│ Map Layer  (extension/adapters/ + injected-komoot.js / injected-ridewithgps.js) │
-│  RouteplannerAdapter (interface)  ←  KomootAdapter                              │
-│                                   ←  RideWithGPSAdapter                         │
-└─────────────────────────────────────────────────────────────────────────────────┘
+│ Map Layer  (extension/adapters/ + injected-komoot.js / injected-ridewithgps.js / injected-garmin.js) │
+│  RouteplannerAdapter (interface)  ←  KomootAdapter                                                    │
+│                                   ←  RideWithGPSAdapter                                               │
+│                                   ←  GarminAdapter                                                    │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Extension plumbing on top of the three layers:
@@ -89,6 +90,9 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/content-ridewithgps.js` | Same bridge role as `content.js` but injects `RideWithGPSAdapter.js` then `injected-ridewithgps.js`. |
 | `extension/adapters/RideWithGPSAdapter.js` | `RideWithGPSAdapter` class. Detects map library at runtime (`_mapType`): MapLibre GL path uses sources/layers (same as KomootAdapter); Leaflet path uses `L.layerGroup` + `L.geoJSON`. Shared helpers: `toContent`, `escHtml`, `buildPopupHtml`, source/layer constants. |
 | `extension/injected-ridewithgps.js` | Thin orchestrator for RideWithGPS: instantiates `RideWithGPSAdapter`, wires messages, runs Leaflet + MapLibre detection (window interceptors + DOM polling). No React fiber walk. |
+| `extension/content-garmin.js` | Same bridge role as `content.js` but injects `GarminAdapter.js` then `injected-garmin.js`. Matches `connect.garmin.com/app/courses*` and `/app/course/*`. |
+| `extension/adapters/GarminAdapter.js` | `GarminAdapter` class. Leaflet-only — no `_mapType` flag. `onMapReady` resets `_leafletLayers = null` on each call so SPA route changes always get a fresh layer set on the new map instance. |
+| `extension/injected-garmin.js` | Thin orchestrator for Garmin Connect: patches `L.Map` via `L.Map.extend`, intercepts `window.L` assignment, includes a 30 s late-injection poll. No React fiber walk or MapLibre detection needed. |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -193,3 +197,4 @@ Read these before making significant changes to understand the intended design.
 - **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected-komoot.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected-komoot.js` must stay in sync.
 - **RideWithGPS dual-library detection**: `RideWithGPSAdapter._mapType` is set once in `onMapReady` by checking `typeof map.getSource === 'function'`. All four interface methods branch on this flag. If you add a feature that behaves differently per library, add it to **both** branches and update the `_mapType` check if the heuristic ever proves unreliable.
 - **Leaflet `_lastData`**: `setLimitedVisible` on the Leaflet path re-calls `_applyDataLeaflet(this._lastData)`. If `_lastData` is `null` (no data fetched yet), the call is skipped. This is intentional — the filter will be applied on the next `applyData` call.
+- **Garmin Connect SPA map re-creation**: `GarminAdapter.onMapReady` fires on every `L.Map` instantiation. On SPA route changes Garmin destroys the old map and creates a new one, so `onMapReady` fires again with a new instance. The adapter sets `this._leafletLayers = null` at the top of `onMapReady` to discard stale layer group references before `_initLeafletLayers` creates fresh ones on the new map. Do not add a `if (this._map === map) return` guard — it would break SPA re-detection.
