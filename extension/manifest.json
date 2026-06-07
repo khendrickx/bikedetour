@@ -37,8 +37,14 @@
     }
   ],
 
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+
   "action": {
     "default_popup": "popup.html",
-    "default_title": "BikeDetour"
+    "default_title": "BikeDetour",
+    "default_icon": "icons/icon.svg"
   }
 }

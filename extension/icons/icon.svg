@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#FB8C00"/>
+
+  <!-- Rear wheel -->
+  <circle cx="11" cy="33" r="8" fill="none" stroke="white" stroke-width="2.2"/>
+  <circle cx="11" cy="33" r="1.5" fill="white"/>
+
+  <!-- Front wheel -->
+  <circle cx="37" cy="33" r="8" fill="none" stroke="white" stroke-width="2.2"/>
+  <circle cx="37" cy="33" r="1.5" fill="white"/>
+
+  <!-- Frame: chainstay, seat stay, seat tube, top tube, down tube, fork -->
+  <line x1="11" y1="33" x2="23" y2="33" stroke="white" stroke-width="2"/>
+  <line x1="11" y1="33" x2="20" y2="20" stroke="white" stroke-width="2"/>
+  <line x1="20" y1="20" x2="23" y2="33" stroke="white" stroke-width="2"/>
+  <line x1="20" y1="20" x2="34" y2="20" stroke="white" stroke-width="2"/>
+  <line x1="34" y1="20" x2="23" y2="33" stroke="white" stroke-width="2"/>
+  <line x1="34" y1="20" x2="37" y2="33" stroke="white" stroke-width="2"/>
+
+  <!-- Seat -->
+  <line x1="17" y1="19" x2="24" y2="19" stroke="white" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Handlebars: stem + bar -->
+  <line x1="34" y1="20" x2="36" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <line x1="33" y1="16" x2="39" y2="16" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Detour arrow (top-left, indicating rerouting) -->
+  <path d="M4 11 Q10 5 17 8" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  <polygon points="14,5 18,9 14,12" fill="white" opacity="0.85"/>
+</svg>
