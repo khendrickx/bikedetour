@@ -1,6 +1,6 @@
 # Cycling Road Works Overlay
 
-A browser extension that overlays active construction zones and road closures on cycling route planners — currently [Komoot](https://www.komoot.com) and [RideWithGPS](https://ridewithgps.com). Plan your route and instantly see which paths are blocked, restricted, or under construction — before you ride.
+A browser extension that overlays active construction zones and road closures on cycling route planners — currently [Komoot](https://www.komoot.com), [RideWithGPS](https://ridewithgps.com), and [Garmin Connect](https://connect.garmin.com). Plan your route and instantly see which paths are blocked, restricted, or under construction — before you ride.
 
 ---
 
@@ -29,7 +29,7 @@ Komoot and RideWithGPS are excellent at finding scenic cycling routes, but neith
 
 ### Features
 
-- **Zero configuration** — install and visit [komoot.com/plan](https://www.komoot.com/plan) or [ridewithgps.com/routes](https://ridewithgps.com/routes/new).
+- **Zero configuration** — install and visit [komoot.com/plan](https://www.komoot.com/plan), [ridewithgps.com/routes](https://ridewithgps.com/routes/new), or [connect.garmin.com/app/courses](https://connect.garmin.com/app/courses).
 - **Live data** — fetched fresh from official APIs on every map pan or zoom; cached for 10 minutes per viewport tile.
 - **Hover popups** — click any overlay to see description, dates, owning organisation.
 - **Toggle switch** — enable/disable the overlay from the extension popup without reloading the page.
@@ -83,6 +83,7 @@ The extension is split into three layers:
 │ Map Layer                                                              │
 │  RouteplannerAdapter (interface)  ←  KomootAdapter                    │
 │                                   ←  RideWithGPSAdapter               │
+│                                   ←  GarminAdapter                    │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,7 +116,7 @@ The extension is split into three layers:
 - Applying incoming `dataBySource` to the map
 - Responding to `setVisible` / `setLimitedVisible` commands
 
-`KomootAdapter` (inside `injected-komoot.js`) implements this interface for Komoot's bundled MapLibre GL instance. `RideWithGPSAdapter` (inside `injected-ridewithgps.js`) implements the same interface for RideWithGPS, which can use either Leaflet or MapLibre GL depending on the page.
+`KomootAdapter` (inside `injected-komoot.js`) implements this interface for Komoot's bundled MapLibre GL instance. `RideWithGPSAdapter` (inside `injected-ridewithgps.js`) implements the same interface for RideWithGPS, which can use either Leaflet or MapLibre GL depending on the page. `GarminAdapter` (inside `injected-garmin.js`) implements the interface for Garmin Connect's Leaflet map; it patches `L.Map` via `L.Map.extend` to handle SPA re-creation of the map on each route change.
 
 ### Extension plumbing
 
@@ -123,9 +124,11 @@ The extension is split into three layers:
 popup.html/popup.js       →  chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
 content.js                →  injects injected-komoot.js; bridges RW_FETCH ↔ FETCH_ROADWORKS
 content-ridewithgps.js    →  same bridge role; injects RideWithGPSAdapter.js + injected-ridewithgps.js
+content-garmin.js         →  same bridge role; injects GarminAdapter.js + injected-garmin.js
 background.js             →  service worker; DataAggregator.fetchForBbox()
 injected-komoot.js        →  KomootAdapter; patches/detects MapLibre; renders overlay
 injected-ridewithgps.js   →  RideWithGPSAdapter; detects Leaflet or MapLibre; renders overlay
+injected-garmin.js        →  GarminAdapter; patches L.Map for SPA re-detection; renders overlay
 ```
 
 ### Normalised feature schema
