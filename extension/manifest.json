@@ -32,7 +32,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["adapters/KomootAdapter.js", "injected.js"],
       "matches": ["https://www.komoot.com/*"]
     }
   ],

@@ -81,9 +81,10 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/datasources/Flanders\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
 | `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
+| `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected.js`. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `injected.js` at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
-| `extension/injected.js` | `KomootAdapter` class (implements RouteplannerAdapter interface) + Komoot-specific map detection (window interceptors + React fiber walk). |
+| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
+| `extension/injected.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -159,9 +160,10 @@ See README.md for the full walkthrough with code examples.
 ## Adding a New Route Planning Service (Adapter)
 
 1. Read `extension/adapters/RouteplannerAdapter.js` for the four-method interface.
-2. Copy `injected.js` → `injected-<service>.js`; replace map detection and layer logic.
-3. Create `extension-<service>/manifest.json` pointing at the new injected script.
-4. Add the service domain to `host_permissions`.
+2. Copy `extension/adapters/KomootAdapter.js` → `extension/adapters/<Service>Adapter.js`; replace map detection and layer logic.
+3. Create `extension/injected-<service>.js` — wire up the adapter (inject it before `injected.js` or create a service-specific injected script).
+4. Create `extension-<service>/manifest.json` pointing at the new injected script; add both adapter and injected scripts to `web_accessible_resources`.
+5. Add the service domain to `host_permissions`.
 
 See README.md for the full walkthrough.
 
@@ -181,5 +183,6 @@ Read these before making significant changes to understand the intended design.
 - **MV3 service worker lifecycle**: the service worker can be terminated between requests. `DataAggregator._cache` is in-memory and will be empty after wake-up — this is fine because `fetchForBbox` rebuilds the cache on every miss.
 - **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
 - **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
-- **`injected.js` is not an ES module**: it is injected as a plain `<script>` tag and cannot use `import`. All adapter code must be self-contained in the file. `extension/adapters/RouteplannerAdapter.js` is documentation, not a runtime dependency.
+- **Page-context scripts are not ES modules**: `adapters/KomootAdapter.js` and `injected.js` are injected as plain `<script>` tags and cannot use `import`. `KomootAdapter.js` defines globals (no IIFE); `injected.js` consumes them. Both must be listed in `web_accessible_resources`. `RouteplannerAdapter.js` is documentation only, not a runtime dependency.
+- **Injection order matters**: `content.js` injects `KomootAdapter.js` first and waits for its `load` event before injecting `injected.js`. If you add another adapter script, follow the same sequential pattern.
 - **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.
