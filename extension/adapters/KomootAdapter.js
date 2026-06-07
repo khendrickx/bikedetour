@@ -1,13 +1,13 @@
 /**
- * KomootAdapter — page-context script, injected before injected.js.
+ * KomootAdapter — page-context script, injected before injected-komoot.js.
  *
- * Defines globals used by injected.js:
+ * Defines globals used by injected-komoot.js:
  *   - toContent(type, payload)  — send a postMessage to content.js
  *   - KomootAdapter             — the adapter class
  *
  * This file is NOT an ES module (no import/export). It is injected as a
  * plain <script> tag so its top-level declarations become page globals,
- * accessible to the injected.js script that loads after it.
+ * accessible to the injected-komoot.js script that loads after it.
  */
 
 // ── Message bridge (page → content) ──────────────────────────────────────────

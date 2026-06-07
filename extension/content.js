@@ -3,9 +3,9 @@
  * Injected into every komoot.com page at document_start.
  *
  * Responsibilities:
- *  1. Inject injected.js into the page context so it can access window.mapboxgl.
- *  2. Bridge data requests from injected.js → background service worker.
- *  3. Forward toggle commands from the popup → injected.js.
+ *  1. Inject injected-komoot.js into the page context so it can access window.mapboxgl.
+ *  2. Bridge data requests from injected-komoot.js → background service worker.
+ *  3. Forward toggle commands from the popup → injected-komoot.js.
  */
 
 (function () {
@@ -19,7 +19,7 @@
   // before Komoot's bundle assigns window.mapboxgl.
 
   // Scripts are injected sequentially: the adapter must be defined before
-  // injected.js runs, so we wait for each script's load event before appending
+  // injected-komoot.js runs, so we wait for each script's load event before appending
   // the next one.
   function injectScript(path, next) {
     const script = document.createElement('script');
@@ -28,7 +28,7 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
-  injectScript('adapters/KomootAdapter.js', () => injectScript('injected.js'));
+  injectScript('adapters/KomootAdapter.js', () => injectScript('injected-komoot.js'));
 
   // ── 2. Bridge: page → background ─────────────────────────────────────────
 

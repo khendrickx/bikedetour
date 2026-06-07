@@ -9,7 +9,7 @@
  *  - reacting to show/hide and severity-filter commands
  *
  * IMPLEMENTATION NOTE
- * Adapters run inside `injected.js` (page context), which is loaded as a
+ * Adapters run inside `injected-komoot.js` (page context), which is loaded as a
  * plain <script> tag and cannot use ES module imports. This file therefore
  * serves as a reference specification; your adapter class lives inside its
  * own injected script file and mirrors this interface by convention rather
@@ -17,7 +17,7 @@
  *
  * HOW TO ADD A NEW ADAPTER
  *  1. Create `extension/adapters/<Service>Adapter.js` — copy the KomootAdapter
- *     from `injected.js` as a starting point.
+ *     from `injected-komoot.js` as a starting point.
  *  2. Implement the four methods below (onMapReady, applyData, setVisible,
  *     setLimitedVisible) using the target service's map SDK.
  *  3. Create `extension/injected-<service>.js` — wire up the adapter and the

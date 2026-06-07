@@ -24,7 +24,7 @@ Three-layer design with MV3 sandbox isolation:
 └──────────────────────────────┬──────────────────────────────┘
                                │ { sourceId: FeatureCollection }
 ┌──────────────────────────────▼──────────────────────────────┐
-│ Map Layer  (extension/adapters/ + injected.js)              │
+│ Map Layer  (extension/adapters/ + injected-komoot.js)              │
 │  RouteplannerAdapter (interface)  ←  KomootAdapter          │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -34,14 +34,14 @@ Extension plumbing on top of the three layers:
 ```
 popup.html / popup.js   ← chrome.storage.local + chrome.tabs.sendMessage(TOGGLE)
        ↕ chrome.runtime.sendMessage
-content.js              ← bridges RW_FETCH ↔ FETCH_ROADWORKS; injects injected.js
+content.js              ← bridges RW_FETCH ↔ FETCH_ROADWORKS; injects injected-komoot.js
        ↕ window.postMessage
-injected.js (KomootAdapter) ← page context; patches/detects MapLibre; renders overlay
+injected-komoot.js (KomootAdapter) ← page context; patches/detects MapLibre; renders overlay
        ↕
 background.js           ← service worker; DataAggregator.fetchForBbox()
 ```
 
-**Why the indirection:** MV3 content scripts cannot access objects created by the host page's JS. `injected.js` is inserted into the page's JS context via `content.js` so it can intercept Komoot's MapLibre instance.
+**Why the indirection:** MV3 content scripts cannot access objects created by the host page's JS. `injected-komoot.js` is inserted into the page's JS context via `content.js` so it can intercept Komoot's MapLibre instance.
 
 ## Data Sources
 
@@ -81,10 +81,10 @@ All `fetchForBbox()` implementations must return features with these properties:
 | `extension/datasources/Flanders\|Brussels\|Ndw\|Luxembourg\|OsmDataSource.js` | One file per source; each owns its fetcher and normaliser. |
 | `extension/logic/DataAggregator.js` | Filters sources by bbox overlap, fans out with `Promise.allSettled`, caches by 0.25° tile (10-min TTL), returns `{ data: Record<sourceId, FeatureCollection>, fromCache }`. |
 | `extension/adapters/RouteplannerAdapter.js` | Interface spec (JSDoc). Adapters cannot import this at runtime — it is reference documentation only. |
-| `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected.js`. |
+| `extension/adapters/KomootAdapter.js` | `KomootAdapter` class + layer/source constants + popup helpers. Plain script (no IIFE, no ES modules) — top-level declarations become page globals used by `injected-komoot.js`. |
 | `extension/background.js` | Thin service worker. Imports sources + aggregator, handles `FETCH_ROADWORKS` messages. |
-| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
-| `extension/injected.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
+| `extension/content.js` | Bridges popup ↔ injected. Injects `adapters/KomootAdapter.js` then `injected-komoot.js` sequentially at `document_start`. Forwards data as `{ __rw, type: 'RW_DATA', data: { flanders, brussels, ndw, luxembourg, osm } }`. |
+| `extension/injected-komoot.js` | Thin orchestrator: instantiates `KomootAdapter`, wires incoming messages, runs Komoot-specific map detection (window interceptors + React fiber walk). |
 | `extension/popup.html` / `popup.js` | Toggle UI. Persists `overlayEnabled` and `showLimitedAccess` to `chrome.storage.local`. |
 | `extension/manifest.json` | Chrome MV3 manifest. Background declared as `"type": "module"` so ES imports work. |
 | `extension-firefox/manifest.json` | Firefox variant (adds `browser_specific_settings`, adjusts background declaration). |
@@ -100,7 +100,7 @@ All `fetchForBbox()` implementations must return features with these properties:
 
 ## Map Layer Naming Convention
 
-Layers registered by `KomootAdapter._addLayers()` in `injected.js`:
+Layers registered by `KomootAdapter._addLayers()` in `injected-komoot.js`:
 
 | Layer ID | Source constant | MapLibre source | Shape |
 |----------|----------------|-----------------|-------|
@@ -113,7 +113,7 @@ Layers registered by `KomootAdapter._addLayers()` in `injected.js`:
 | `rw-osm-line` | `LAYER_OSM_LINE` | `rw-osm` | dashed line |
 | `rw-osm-circle` | `LAYER_OSM_CIRCLE` | `rw-osm` | circle (barrier=construction nodes) |
 
-`ALL_LAYERS` array in `injected.js` must include every layer so `setVisible()` and `setLimitedVisible()` apply uniformly.
+`ALL_LAYERS` array in `injected-komoot.js` must include every layer so `setVisible()` and `setLimitedVisible()` apply uniformly.
 
 Severity colours: full closure `#E53935` / `#C62828` (OSM tint), partial `#FB8C00` / `#E65100` (OSM tint).
 
@@ -152,7 +152,7 @@ dist/bikedetour-firefox.zip
 3. Register in `background.js` → `new DataAggregator([..., new NameDataSource()])`.
 4. Add `host_permissions` in both manifests.
 5. Add a source + layer block in `KomootAdapter._addLayers()`.
-6. Add the new layer to `ALL_LAYERS` in `injected.js`.
+6. Add the new layer to `ALL_LAYERS` in `injected-komoot.js`.
 7. Wire source data in `KomootAdapter.applyData()`.
 
 See README.md for the full walkthrough with code examples.
@@ -161,7 +161,7 @@ See README.md for the full walkthrough with code examples.
 
 1. Read `extension/adapters/RouteplannerAdapter.js` for the four-method interface.
 2. Copy `extension/adapters/KomootAdapter.js` → `extension/adapters/<Service>Adapter.js`; replace map detection and layer logic.
-3. Create `extension/injected-<service>.js` — wire up the adapter (inject it before `injected.js` or create a service-specific injected script).
+3. Create `extension/injected-<service>.js` — wire up the adapter (inject it before `injected-komoot.js` or create a service-specific injected script).
 4. Create `extension-<service>/manifest.json` pointing at the new injected script; add both adapter and injected scripts to `web_accessible_resources`.
 5. Add the service domain to `host_permissions`.
 
@@ -184,6 +184,6 @@ Read these before making significant changes to understand the intended design.
 - **MV3 service worker lifecycle**: the service worker can be terminated between requests. `DataAggregator._cache` is in-memory and will be empty after wake-up — this is fine because `fetchForBbox` rebuilds the cache on every miss.
 - **NDW and Luxembourg caches live in their `DataSource` instances**: the aggregator holds single instances so the 15-min caches persist across viewport changes within the same service worker lifetime.
 - **Firefox compatibility**: keep manifest differences limited to `extension-firefox/manifest.json`; shared `extension/` code must work for both browsers.
-- **Page-context scripts are not ES modules**: `adapters/KomootAdapter.js` and `injected.js` are injected as plain `<script>` tags and cannot use `import`. `KomootAdapter.js` defines globals (no IIFE); `injected.js` consumes them. Both must be listed in `web_accessible_resources`. `RouteplannerAdapter.js` is documentation only, not a runtime dependency.
-- **Injection order matters**: `content.js` injects `KomootAdapter.js` first and waits for its `load` event before injecting `injected.js`. If you add another adapter script, follow the same sequential pattern.
-- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected.js` must stay in sync.
+- **Page-context scripts are not ES modules**: `adapters/KomootAdapter.js` and `injected-komoot.js` are injected as plain `<script>` tags and cannot use `import`. `KomootAdapter.js` defines globals (no IIFE); `injected-komoot.js` consumes them. Both must be listed in `web_accessible_resources`. `RouteplannerAdapter.js` is documentation only, not a runtime dependency.
+- **Injection order matters**: `content.js` injects `KomootAdapter.js` first and waits for its `load` event before injecting `injected-komoot.js`. If you add another adapter script, follow the same sequential pattern.
+- **Data key for Flanders**: the data blob sent from `background.js` → `content.js` → `injected-komoot.js` uses `flanders` as the key for Flanders/GIPOD data. The `FlandersDataSource.id` and `SOURCE_FLANDERS` constant in `injected-komoot.js` must stay in sync.

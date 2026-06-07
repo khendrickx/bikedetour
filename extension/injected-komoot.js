@@ -1,12 +1,12 @@
 /**
- * injected.js — runs in the PAGE context (not the extension context).
+ * injected-komoot.js — runs in the PAGE context (not the extension context).
  *
  * Thin orchestrator: wires together the KomootAdapter (loaded just before
  * this script by content.js) with the Komoot-specific map detection logic.
  *
  * Execution order guaranteed by content.js:
  *   1. adapters/KomootAdapter.js  — defines KomootAdapter, toContent, constants
- *   2. injected.js                — this file
+ *   2. injected-komoot.js         — this file
  *
  * Communication with content.js uses window.postMessage with a source tag.
  */
