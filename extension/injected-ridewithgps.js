@@ -122,6 +122,84 @@
     }
   }, 200);
 
+  // ── React fiber walk (handles RideWithGPS bundled MapLibre GL) ───────────
+
+  function isMapInstance(obj) {
+    return obj != null && typeof obj === 'object' &&
+      typeof obj.on === 'function' &&
+      typeof obj.getZoom === 'function' &&
+      typeof obj.getBounds === 'function' &&
+      typeof obj.addLayer === 'function';
+  }
+
+  function findMapInFiber(fiber, depth) {
+    if (!fiber || depth > 60) return null;
+    const props = fiber.memoizedProps;
+    if (props && typeof props === 'object') {
+      for (const v of Object.values(props)) {
+        if (isMapInstance(v)) return v;
+        if (v && typeof v === 'object' && isMapInstance(v.current)) return v.current;
+      }
+    }
+    let state = fiber.memoizedState;
+    let ss = 0;
+    while (state && ss++ < 30) {
+      if (isMapInstance(state.memoizedState)) return state.memoizedState;
+      if (state.memoizedState && typeof state.memoizedState === 'object') {
+        for (const v of Object.values(state.memoizedState)) {
+          if (isMapInstance(v)) return v;
+          if (v && typeof v === 'object' && isMapInstance(v.current)) return v.current;
+        }
+      }
+      state = state.next;
+    }
+    return findMapInFiber(fiber.child,   depth + 1)
+        || findMapInFiber(fiber.sibling, depth + 1)
+        || findMapInFiber(fiber.return,  depth + 1);
+  }
+
+  function tryGetMapFromCanvas(canvas) {
+    let el = canvas;
+    while (el && el !== document.body) {
+      const fk = Object.keys(el).find(k =>
+        k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+      );
+      if (fk) {
+        const map = findMapInFiber(el[fk], 0);
+        if (map) return map;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function waitForMapViaDOM() {
+    let attempts = 0;
+
+    function tryCanvas() {
+      if (adapter._map) return true;
+      const canvas = document.querySelector('.maplibregl-canvas');
+      if (!canvas) return false;
+      const map = tryGetMapFromCanvas(canvas);
+      if (map) { onMapDiscovered(map); return true; }
+      return false;
+    }
+
+    if (tryCanvas()) return;
+
+    const mo = new MutationObserver(() => {
+      if (document.querySelector('.maplibregl-canvas')) {
+        mo.disconnect();
+        const timer = setInterval(() => {
+          if (tryCanvas() || ++attempts > 50) clearInterval(timer);
+        }, 200);
+      }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  waitForMapViaDOM();
+
   // Signal that the message listener is live; content script responds with stored preferences
   toContent('RW_READY', {}); // eslint-disable-line no-undef
 })();
