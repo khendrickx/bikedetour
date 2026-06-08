@@ -1,0 +1,83 @@
+{
+  "manifest_version": 3,
+  "name": "BikeDetour",
+  "version": "0.1.4",
+  "description": "Overlay cycling construction works and road closures on route planner maps so you can detour around them. https://github.com/khendrickx/bikedetour",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "bikedetour@cycling-construction-planning",
+      "update_url": "https://kilianhendrickx.be/bikedetour/updates.json",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
+    }
+  },
+
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.komoot.com/*",
+    "https://geo.api.vlaanderen.be/*",
+    "https://data.mobility.brussels/*",
+    "https://opendata.ndw.nu/*",
+    "https://www.cita.lu/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://www.komoot.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://ridewithgps.com/routes/new",
+        "https://ridewithgps.com/routes/*"
+      ],
+      "js": ["content-ridewithgps.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://connect.garmin.com/app/courses",
+        "https://connect.garmin.com/app/courses/*",
+        "https://connect.garmin.com/app/course/*"
+      ],
+      "js": ["content-garmin.js"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["adapters/KomootAdapter.js", "injected-komoot.js"],
+      "matches": ["https://www.komoot.com/*"]
+    },
+    {
+      "resources": ["adapters/RideWithGPSAdapter.js", "injected-ridewithgps.js"],
+      "matches": ["https://ridewithgps.com/*"]
+    },
+    {
+      "resources": ["adapters/GarminAdapter.js", "injected-garmin.js"],
+      "matches": ["https://connect.garmin.com/*"]
+    }
+  ],
+
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BikeDetour",
+    "default_icon": "icons/icon.svg"
+  }
+}

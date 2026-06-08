@@ -16,6 +16,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC="$ROOT/extension"
 FIREFOX_MANIFEST="$ROOT/extension-firefox/manifest.json"
+FIREFOX_TEST_MANIFEST="$ROOT/extension-firefox-test/manifest.json"
 DIST="$ROOT/dist"
 
 if [[ "${1:-}" == "clean" ]]; then
@@ -23,7 +24,7 @@ if [[ "${1:-}" == "clean" ]]; then
   rm -rf "$DIST"
 fi
 
-mkdir -p "$DIST/chrome" "$DIST/firefox"
+mkdir -p "$DIST/chrome" "$DIST/firefox" "$DIST/firefox-test"
 
 # ── Chrome ────────────────────────────────────────────────────────────────────
 echo "Building Chrome extension..."
@@ -35,10 +36,17 @@ cp -r "$SRC"/. "$DIST/firefox/"
 # Replace manifest with Firefox-specific version
 cp "$FIREFOX_MANIFEST" "$DIST/firefox/manifest.json"
 
+# ── Firefox test───────────────────────────────────────────────────────────────
+echo "Building Firefox test extension..."
+cp -r "$SRC"/. "$DIST/firefox-test/"
+# Replace manifest with Firefox-specific version
+cp "$FIREFOX_TEST_MANIFEST" "$DIST/firefox-test/manifest.json"
+
 # ── Zip archives ──────────────────────────────────────────────────────────────
 echo "Zipping..."
 (cd "$DIST/chrome"   && zip -qr "../bikedetour-chrome.zip"   . --exclude "*/.DS_Store" --exclude ".DS_Store")
 (cd "$DIST/firefox"  && zip -qr "../bikedetour-firefox.zip"  . --exclude "*/.DS_Store" --exclude ".DS_Store")
+(cd "$DIST/firefox-test" && zip -qr "../bikedetour-firefox-test.zip" . --exclude "*/.DS_Store" --exclude ".DS_Store")
 
 echo ""
 echo "Done."
@@ -46,3 +54,4 @@ echo "  dist/chrome/                    — load as unpacked extension in Chrome
 echo "  dist/firefox/                   — load as temporary add-on in Firefox"
 echo "  dist/bikedetour-chrome.zip  — Chrome Web Store submission"
 echo "  dist/bikedetour-firefox.zip — AMO (addons.mozilla.org) submission"
+echo "  dist/bikedetour-firefox-test.zip — Firefox test extension submission"
